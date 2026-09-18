@@ -1,0 +1,8 @@
+{
+  "experiment_id": "E5",
+  "split": "dev",
+  "preprocessing": {"mode": "bbox", "bbox_policy": "highest_confidence", "padding_ratio": 0.0},
+  "category_filter": {"policy": "hard"},
+  "retrieval": {"top_k": 10, "dedupe": true},
+  "_bbox_policy_note": "highest_confidence is a placeholder, not a decided 'best' policy -- IMPLEMENTATION_SPEC.md section 67 rule 7 forbids finalizing that without ablation evidence (Milestone 8/10 scope). Revisit once E1-E4 have real results."
+}
