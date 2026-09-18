@@ -1,7 +1,7 @@
 # Milestone 7 — Padding Ablation (E7–E8): Evidence Record
 
 **Branch:** `feat/m7-padding-ablation` (created from `main` after PR #1–#6 were merged)
-**PR:** _(filled in after the PR is opened)_
+**PR:** https://github.com/leedoming/rewearlab-ai-project/pull/7
 **Repository:** fork `leedoming/rewearlab-ai-project` (upstream: `GeeYun086/rewearlab-ai-project`)
 
 ---
@@ -171,4 +171,4 @@ fake pipelines for both experiment runner functions).
 
 ## 9. PR
 
-_(filled in after the PR is opened)_
+https://github.com/leedoming/rewearlab-ai-project/pull/7
