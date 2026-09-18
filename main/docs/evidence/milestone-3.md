@@ -1,7 +1,7 @@
 # Milestone 3 — Dataset Support: Evidence Record
 
 **Branch:** `feat/m3-dataset-support` (created from merged `main` at `5dc2c77`)
-**PR:** TODO — 브랜치 push 후 생성
+**PR:** https://github.com/leedoming/rewearlab-ai-project/pull/3
 
 ## 1. Objective
 
@@ -63,7 +63,7 @@ Ground truth는 전체 catalog 전수 라벨이 아니라 여러 retrieval 설�
 - `evaluation/dataset/query_manifest.csv`: 빈 query manifest 템플릿
 - `evaluation/dataset/labels.json`: 빈 `eval-v1` pooled labels 템플릿
 - `evaluation/dataset/labels.schema.json`: 편집기/사람 검토용 JSON Schema
-- `evaluation/dataset/loader.py`: stdlib-only loader와 validation
+- `evaluation/dataset/loader.py`: third-party dependency 없는 loader와 validation
 - `evaluation/dataset/README.md`: 수집·라벨링 기준과 한계
 - `tests/unit/test_dataset_loader.py`: 정상 로드와 핵심 invalid cases
 
@@ -83,7 +83,8 @@ From `main/`:
 python -m pytest tests/unit -q
 ```
 
-Result: `100 passed in 0.60s`.
+Initial result: `100 passed in 0.60s`.
+Result after review fixes: `105 passed in 0.76s`.
 
 실제 query image/label은 아직 없으므로 dataset quality나 retrieval 성능 수치는 없다.
 
@@ -98,11 +99,30 @@ Result: `100 passed in 0.60s`.
 - Exact duplicate 방지는 이미지 해시를 계산하는 수집 도구가 생기기 전까지 수동
   확인 항목이다.
 
-## 7. Commit SHAs
+## 7. Review round 1
+
+PR review에서 실제 평가값을 조용히 왜곡할 수 있는 네 가지 경로를 확인했다.
+
+- manifest query에 labels entry가 없어도 빈 ground truth로 로드됨
+- category 오타가 검증 없이 통과함
+- product ID 앞뒤 공백 때문에 retrieval ID와 매칭이 실패할 수 있음
+- frozen dataclass 내부의 labels dict는 여전히 변경 가능함
+
+모두 확인된 문제로 판단해 수정했다. 모든 manifest query는 labels에 명시적으로
+존재해야 하며, truly-empty ground truth도 `[]`로 의도를 표현한다. Category는 별도
+목록을 중복 작성하지 않고 `retrieval.config.COLLECTION_NAMES`를 재사용한다. Product
+ID는 trim 후 중복 검사/저장하고, labels는 `MappingProxyType`으로 노출해 실제로
+불변성을 보장한다. 추가로 labels JSON 최상위가 object가 아닐 때 일관된
+`DatasetValidationError`를 반환하도록 보강했다.
+
+각 경로에 unit test를 추가했으며 전체 suite는 105개가 통과했다.
+
+## 8. Commit SHAs
 
 ```text
 99f07d2  feat: add evaluation dataset support
+bd8ceb5  docs: add milestone 3 evidence record
+efdbe72  fix: harden dataset validation
 ```
 
-이 Evidence 문서는 다음 커밋에 추가된다. PR URL과 Evidence 커밋 SHA는 PR 생성 후
-문서에 갱신한다.
+이 리뷰 기록 업데이트는 다음 문서 커밋에 포함된다.
