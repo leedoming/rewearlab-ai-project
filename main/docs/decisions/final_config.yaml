@@ -1,0 +1,32 @@
+# Final pipeline configuration — IMPLEMENTATION_SPEC.md section 50.
+#
+# MUST (section 50): "실험 이전에 TODO 값을 임의로 확정하지 않는다" -- do not
+# arbitrarily finalize TODO values before the experiments that justify them
+# have actually been run.
+#
+# Every value below is still TBD. Milestones 4-9 built the full
+# infrastructure to produce every number this file needs (RAW baseline,
+# four bbox selection policies, category filtering, padding ablation,
+# failure taxonomy, sensitivity metrics) -- see docs/evidence/milestone-4.md
+# through milestone-9.md -- but none of it has been run against real data:
+# main/evaluation/dataset/labels.json is still an empty scaffold
+# (`{"queries": {}}`), and torch/chromadb/transformers/open_clip are not
+# installed in this dev environment. Filling in any value here without that
+# evidence would be exactly the fabrication this project's evidence docs
+# have refused to do at every prior milestone. See docs/decisions/ADR-005-
+# final-pipeline.md for the full reasoning and the exact criteria that will
+# decide each value once real ablation results exist.
+
+final_pipeline:
+  preprocessing: TBD  # raw | bbox -- pending E0 vs E1-E4 comparison (ADR-001)
+  bbox_policy: TBD    # highest_confidence | largest | category_confidence | category_largest (ADR-002)
+  padding_ratio: TBD  # 0.0 | 0.1 | 0.2 (ADR-004)
+
+  category_filter:
+    policy: TBD        # none | hard | soft (ADR-003)
+
+  detection:
+    threshold: TBD     # 0.3 | 0.4 | 0.5 (Milestone 9 sensitivity sweep)
+
+  retrieval:
+    top_k: TBD         # 5 | 10 | 20 (Milestone 9 sensitivity sweep)

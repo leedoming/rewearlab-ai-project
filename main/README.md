@@ -328,6 +328,40 @@ docker push clothingresaleacr.azurecr.io/main-app:latest
 
 ---
 
+## 🔬 Retrieval 평가 시스템 (Milestone 1–10)
+
+`musinsa_to_chromadb.py`/`musinsa_detect.py`/`app.py`에 흩어져 있던 detection→crop→embedding→
+search 로직을 `retrieval/`(UI 독립적인 core 로직)와 `evaluation/`(재현 가능한 실험/평가 인프라)로
+분리하고, RAW 임베딩과 여러 BBox selection policy·category filter policy·padding 값을
+동일한 평가셋·지표로 비교할 수 있는 ablation 인프라를 구축했습니다. 상세 설계 근거와 스펙은
+`IMPLEMENTATION_SPEC.md`를 따릅니다.
+
+### 무엇이 구축되어 있는가
+
+| 영역 | 위치 | 내용 |
+|---|---|---|
+| Retrieval core | `retrieval/` | detection, bbox selection/crop, category mapping, embedding, search — UI와 완전히 분리 |
+| 평가 지표 | `evaluation/metrics.py` | Precision@K, Recall@K, MRR, NDCG@K, incompatible category rate, relevant exclusion rate (dependency-free) |
+| Ablation 실험 | `evaluation/run_*.py` | E0(RAW) ~ E8(RAW+soft filter)까지 9개 실험, config는 `evaluation/configs/*.json` |
+| Failure 분석 | `evaluation/failure_analysis.py` | 10개 failure taxonomy, poor-query 자동 추출, 실험별 failure distribution |
+| Sensitivity 지표 | `evaluation/sensitivity.py` | detection threshold / padding / Top-K sweep을 비교하기 위한 지표 |
+| Golden set / Regression | `evaluation/golden_set.py`, `evaluation/regression.py`, `tests/regression/` | golden set 커버리지 검증, quality regression 임계값 체크, critical query rank 체크 |
+| 결정 기록 | `docs/decisions/ADR-*.md`, `docs/decisions/final_config.yaml` | RAW vs BBox, bbox policy, category filter, padding, 최종 pipeline에 대한 ADR |
+| 마일스톤별 근거 | `docs/evidence/milestone-*.md` | 각 마일스톤의 설계 결정·대안·검증 커맨드/결과·알려진 한계 기록 |
+
+### 현재 상태 (정직하게)
+
+- **실제 데이터로 실험을 실행한 적이 없습니다.** `evaluation/dataset/labels.json`은 아직 빈
+  스캐폴드(`{"queries": {}}`)이고, 이 개발 환경에는 `torch`/`chromadb`/`transformers`/
+  `open_clip`이 설치되어 있지 않습니다. 모든 실험 러너와 지표는 fake/synthetic 입력으로만
+  검증되었습니다 (`cd main && python -m pytest tests/ -q`).
+- 따라서 `docs/decisions/final_config.yaml`의 모든 값은 **TBD**입니다 — 실험 근거 없이 최종
+  pipeline을 확정하지 않는다는 원칙(`IMPLEMENTATION_SPEC.md` section 50)을 지켰습니다.
+- 실제 데이터셋과 ML 의존성이 준비되면, 이미 만들어진 인프라(`run_bbox_experiments.py` 등)를
+  그대로 실행해 `docs/decisions/ADR-*.md`의 Decision을 채우는 것이 다음 단계입니다.
+
+---
+
 ## 🎯 다음 단계
 
 ### Phase 1: 로컬 테스트
