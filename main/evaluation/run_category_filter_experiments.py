@@ -4,7 +4,10 @@ Shares a DetectionCache across E5 and E6 for the same reason
 run_bbox_experiments.py does for E1-E4 (IMPLEMENTATION_SPEC.md section 19).
 Additionally resolves each query's labeled relevant items' true collection
 once (see evaluation/label_lookup.py) so relevant_exclusion_rate reflects
-what the category filter actually excluded, not a placeholder.
+what the category filter actually excluded, not a placeholder -- and, like
+the detection cache, that resolution is memoized by query_id and shared
+across E5 and E6 rather than repeated per experiment, since a query's
+ground-truth labels don't change between them.
 """
 
 import argparse
@@ -61,7 +64,7 @@ def _build_detection_cache():
     return DetectionCache(detect)
 
 
-def _make_pipeline(config, detection_cache, embed_model, preprocess_fn, embed_device, client):
+def _make_pipeline(config, detection_cache, label_collections_cache, embed_model, preprocess_fn, embed_device, client):
     bbox_policy = config["preprocessing"]["bbox_policy"]
     filter_policy = config["category_filter"]["policy"]
     top_k = config["retrieval"]["top_k"]
@@ -89,9 +92,12 @@ def _make_pipeline(config, detection_cache, embed_model, preprocess_fn, embed_de
             dedupe=dedupe,
         )
 
-        label_collections = resolve_label_collections(client, list(query.labels.keys()), COLLECTION_NAMES)
+        if query.query_id not in label_collections_cache:
+            label_collections_cache[query.query_id] = resolve_label_collections(
+                client, list(query.labels.keys()), COLLECTION_NAMES
+            )
         excluded_relevant_count = count_relevant_excluded_by_filter(
-            query.labels, label_collections, searched_collections
+            query.labels, label_collections_cache[query.query_id], searched_collections
         )
 
         return results, metadata, excluded_relevant_count
@@ -113,12 +119,15 @@ def main(argv=None):
 
     dataset = load_dataset(args.dataset_dir)
     detection_cache = _build_detection_cache()
+    label_collections_cache = {}
     embed_model, preprocess_fn, embed_device = load_embedding_model(EMBEDDING_MODEL)
     client = get_chromadb_client(host=args.host, port=args.port, local_path=args.local_db_path)
 
     for config_file in EXPERIMENT_CONFIG_FILES:
         config = _load_config(Path(args.configs_dir) / config_file)
-        pipeline = _make_pipeline(config, detection_cache, embed_model, preprocess_fn, embed_device, client)
+        pipeline = _make_pipeline(
+            config, detection_cache, label_collections_cache, embed_model, preprocess_fn, embed_device, client
+        )
         output_dir = Path(args.output_dir) / config["experiment_id"]
         run_category_filter_experiment(dataset, pipeline, output_dir, config)
 

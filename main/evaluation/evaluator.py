@@ -4,6 +4,8 @@ import csv
 import json
 from pathlib import Path
 
+from retrieval.config import BBOX_SELECTION_POLICIES
+
 from .aggregate import aggregate_metrics
 from .metrics import (
     incompatible_category_rate_at_k,
@@ -260,10 +262,10 @@ def run_category_filter_experiment(dataset, pipeline, output_dir, config):
     if config.get("preprocessing", {}).get("mode") != "bbox":
         raise ValueError(f"{experiment_id} preprocessing.mode must be 'bbox'")
     bbox_policy = config.get("preprocessing", {}).get("bbox_policy")
-    if bbox_policy not in EXPERIMENT_BBOX_POLICIES.values():
+    if bbox_policy not in BBOX_SELECTION_POLICIES:
         raise ValueError(
             f"{experiment_id} preprocessing.bbox_policy must be one of "
-            f"{sorted(set(EXPERIMENT_BBOX_POLICIES.values()))}, got {bbox_policy!r}"
+            f"{sorted(BBOX_SELECTION_POLICIES)}, got {bbox_policy!r}"
         )
     padding_ratio = config.get("preprocessing", {}).get("padding_ratio", 0.0)
     if padding_ratio != 0.0:
