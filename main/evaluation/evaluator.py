@@ -36,8 +36,20 @@ EXPERIMENT_BBOX_POLICIES = {
     "E4": "category_largest",
 }
 
+# IMPLEMENTATION_SPEC.md section 33: E5/E6 vary only the category filter
+# policy (bbox policy held at whatever Milestone 8/10 eventually decides is
+# "Best" -- not yet determined, see run_category_filter_experiment).
+EXPERIMENT_CATEGORY_FILTER_POLICIES = {
+    "E5": "hard",
+    "E6": "soft",
+}
 
-def evaluate_query(query, results):
+
+def evaluate_query(query, results, excluded_relevant_count=0):
+    """`excluded_relevant_count` is 0 by default (correct for E0-E4, which
+    have no category filter to exclude anything) and should be the real
+    count from `evaluation.label_lookup.count_relevant_excluded_by_filter`
+    for category-filtering experiments (E5/E6)."""
     relevances = [query.labels.get(str(result.get("product_id")), 0) for result in results]
     total_relevant = sum(1 for grade in query.labels.values() if grade >= 1)
     incompatible = [result.get("collection") != query.category for result in results]
@@ -53,7 +65,7 @@ def evaluate_query(query, results):
         "incompatible_category_rate_at_10": incompatible_category_rate_at_k(
             incompatible, 10
         ),
-        "relevant_exclusion_rate": relevant_exclusion_rate(total_relevant, 0),
+        "relevant_exclusion_rate": relevant_exclusion_rate(total_relevant, excluded_relevant_count),
     }
 
 
@@ -200,6 +212,78 @@ def run_bbox_experiment(dataset, pipeline, output_dir, config):
     for query in queries:
         results, preprocessing_metadata = pipeline(query)
         metrics = evaluate_query(query, results)
+        records.append(
+            {
+                "query_id": query.query_id,
+                "category": query.category,
+                "difficulty": query.difficulty,
+                "scene_type": query.scene_type,
+                "experiment_id": experiment_id,
+                "config": config,
+                "preprocessing": preprocessing_metadata,
+                "results": results,
+                "metrics": metrics,
+            }
+        )
+
+    summary = _write_experiment_outputs(records, output_dir, dataset, config, experiment_id)
+    return records, summary
+
+
+def run_category_filter_experiment(dataset, pipeline, output_dir, config):
+    """Run one of E5-E6 (category filter ablation) over one dataset split.
+
+    `pipeline(query)` must return `(results, preprocessing_metadata,
+    excluded_relevant_count)`, where `excluded_relevant_count` is the number
+    of the query's labeled relevant items whose known collection was
+    excluded by the category filter before search ever ran (see
+    `evaluation.label_lookup`) -- NOT a placeholder 0 like E0-E4, since a
+    real filter can and should be able to exclude relevant items, and
+    `evaluate_query` needs the true count to report `relevant_exclusion_rate`
+    honestly.
+
+    Per IMPLEMENTATION_SPEC.md section 33, E5/E6 hold the bbox policy fixed
+    at "Best" -- which policy that is has NOT been decided (no ablation
+    result exists yet to justify one; see Milestone 5's evidence doc and
+    IMPLEMENTATION_SPEC.md section 67 rule 7: "실험 결과가 없는 상태에서
+    '최적' policy를 확정하지 않는다"). This function therefore accepts any
+    of the four valid bbox policies rather than a hardcoded expectation --
+    whatever the config declares is recorded in the output, not silently
+    assumed correct.
+    """
+    experiment_id = config.get("experiment_id")
+    expected_filter_policy = EXPERIMENT_CATEGORY_FILTER_POLICIES.get(experiment_id)
+    if expected_filter_policy is None:
+        raise ValueError(
+            f"category filter experiment runner only accepts experiment_id in {sorted(EXPERIMENT_CATEGORY_FILTER_POLICIES)}"
+        )
+    if config.get("preprocessing", {}).get("mode") != "bbox":
+        raise ValueError(f"{experiment_id} preprocessing.mode must be 'bbox'")
+    bbox_policy = config.get("preprocessing", {}).get("bbox_policy")
+    if bbox_policy not in EXPERIMENT_BBOX_POLICIES.values():
+        raise ValueError(
+            f"{experiment_id} preprocessing.bbox_policy must be one of "
+            f"{sorted(set(EXPERIMENT_BBOX_POLICIES.values()))}, got {bbox_policy!r}"
+        )
+    padding_ratio = config.get("preprocessing", {}).get("padding_ratio", 0.0)
+    if padding_ratio != 0.0:
+        raise ValueError(
+            f"{experiment_id} preprocessing.padding_ratio must be 0.0 "
+            "(padding sensitivity is Milestone 9 scope)"
+        )
+    category_filter_policy = config.get("category_filter", {}).get("policy")
+    if category_filter_policy != expected_filter_policy:
+        raise ValueError(
+            f"{experiment_id} category_filter.policy must be {expected_filter_policy!r}, "
+            f"got {category_filter_policy!r}"
+        )
+    _validate_common_retrieval_controls(config)
+    queries = _select_split(dataset, config)
+
+    records = []
+    for query in queries:
+        results, preprocessing_metadata, excluded_relevant_count = pipeline(query)
+        metrics = evaluate_query(query, results, excluded_relevant_count=excluded_relevant_count)
         records.append(
             {
                 "query_id": query.query_id,
