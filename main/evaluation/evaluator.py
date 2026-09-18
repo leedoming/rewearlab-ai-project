@@ -4,7 +4,7 @@ import csv
 import json
 from pathlib import Path
 
-from retrieval.config import BBOX_SELECTION_POLICIES
+from retrieval.config import BBOX_SELECTION_POLICIES, CATEGORY_FILTER_POLICIES
 
 from .aggregate import aggregate_metrics
 from .metrics import (
@@ -44,6 +44,22 @@ EXPERIMENT_BBOX_POLICIES = {
 EXPERIMENT_CATEGORY_FILTER_POLICIES = {
     "E5": "hard",
     "E6": "soft",
+}
+
+# IMPLEMENTATION_SPEC.md section 33: E7 varies only padding_ratio (0% -> 10%),
+# holding bbox policy and category filter policy at whatever Milestone 8/10
+# eventually decides is "Best" for each -- neither has been decided yet (see
+# run_padding_experiment below).
+EXPERIMENT_PADDING_RATIOS = {
+    "E7": 0.1,
+}
+
+# IMPLEMENTATION_SPEC.md section 33: unlike E7, E8's filter column is
+# concretely "Soft" (not "Best"), paired with RAW preprocessing -- isolating
+# "does category filtering alone help, with no bbox/padding at all" from
+# E5-E7's bbox+filter combinations.
+EXPERIMENT_RAW_FILTER_POLICIES = {
+    "E8": "soft",
 }
 
 
@@ -223,6 +239,133 @@ def run_bbox_experiment(dataset, pipeline, output_dir, config):
                 "experiment_id": experiment_id,
                 "config": config,
                 "preprocessing": preprocessing_metadata,
+                "results": results,
+                "metrics": metrics,
+            }
+        )
+
+    summary = _write_experiment_outputs(records, output_dir, dataset, config, experiment_id)
+    return records, summary
+
+
+def run_padding_experiment(dataset, pipeline, output_dir, config):
+    """Run E7 (padding ablation) over one dataset split.
+
+    Per IMPLEMENTATION_SPEC.md section 33, E7 holds bbox policy and category
+    filter policy at "Best" -- neither has been decided (no ablation
+    evidence exists yet for either; see `run_category_filter_experiment`'s
+    own docstring and the Milestone 5/6 evidence docs), so this function
+    accepts any of the four valid bbox policies and any of the three valid
+    category filter policies, exactly like `run_category_filter_experiment`
+    does for bbox policy. The one value the spec's ablation table does
+    concretely pin for E7 is padding_ratio: it must be 0.1 (10%), not 0.0 --
+    that's the entire point of this being a *padding* experiment.
+
+    `pipeline(query)` must return `(results, preprocessing_metadata,
+    excluded_relevant_count)`, the same shape `run_category_filter_experiment`
+    requires, since E7 also filters collections by category before search.
+    """
+    experiment_id = config.get("experiment_id")
+    expected_padding = EXPERIMENT_PADDING_RATIOS.get(experiment_id)
+    if expected_padding is None:
+        raise ValueError(
+            f"padding experiment runner only accepts experiment_id in {sorted(EXPERIMENT_PADDING_RATIOS)}"
+        )
+    if config.get("preprocessing", {}).get("mode") != "bbox":
+        raise ValueError(f"{experiment_id} preprocessing.mode must be 'bbox'")
+    bbox_policy = config.get("preprocessing", {}).get("bbox_policy")
+    if bbox_policy not in BBOX_SELECTION_POLICIES:
+        raise ValueError(
+            f"{experiment_id} preprocessing.bbox_policy must be one of "
+            f"{sorted(BBOX_SELECTION_POLICIES)}, got {bbox_policy!r}"
+        )
+    padding_ratio = config.get("preprocessing", {}).get("padding_ratio")
+    if padding_ratio != expected_padding:
+        raise ValueError(
+            f"{experiment_id} preprocessing.padding_ratio must be {expected_padding!r}, got {padding_ratio!r}"
+        )
+    category_filter_policy = config.get("category_filter", {}).get("policy")
+    if category_filter_policy not in CATEGORY_FILTER_POLICIES:
+        raise ValueError(
+            f"{experiment_id} category_filter.policy must be one of "
+            f"{sorted(CATEGORY_FILTER_POLICIES)}, got {category_filter_policy!r}"
+        )
+    _validate_common_retrieval_controls(config)
+    queries = _select_split(dataset, config)
+
+    records = []
+    for query in queries:
+        results, preprocessing_metadata, excluded_relevant_count = pipeline(query)
+        metrics = evaluate_query(query, results, excluded_relevant_count=excluded_relevant_count)
+        records.append(
+            {
+                "query_id": query.query_id,
+                "category": query.category,
+                "difficulty": query.difficulty,
+                "scene_type": query.scene_type,
+                "experiment_id": experiment_id,
+                "config": config,
+                "preprocessing": preprocessing_metadata,
+                "results": results,
+                "metrics": metrics,
+            }
+        )
+
+    summary = _write_experiment_outputs(records, output_dir, dataset, config, experiment_id)
+    return records, summary
+
+
+def run_raw_filter_experiment(dataset, pipeline, output_dir, config):
+    """Run E8 (RAW baseline + soft category filter) over one dataset split.
+
+    Unlike E7, E8's category_filter.policy is concretely pinned to "soft"
+    (IMPLEMENTATION_SPEC.md section 33 lists E8's filter column as "Soft",
+    not "Best") while preprocessing.mode is "raw" -- no detection, no bbox,
+    no padding. This isolates "does category filtering alone help, with no
+    bbox preprocessing at all" from E5-E7's bbox+filter combinations.
+
+    `pipeline(query)` must return `(results, excluded_relevant_count)` --
+    there is no bbox preprocessing metadata to thread through from the
+    caller; this function constructs the fixed "raw" metadata itself
+    (mirroring `run_baseline`'s E0 metadata), so a caller cannot
+    accidentally fabricate bbox fields for an experiment that never ran
+    detection.
+    """
+    experiment_id = config.get("experiment_id")
+    expected_filter_policy = EXPERIMENT_RAW_FILTER_POLICIES.get(experiment_id)
+    if expected_filter_policy is None:
+        raise ValueError(
+            f"raw filter experiment runner only accepts experiment_id in {sorted(EXPERIMENT_RAW_FILTER_POLICIES)}"
+        )
+    if config.get("preprocessing", {}).get("mode") != "raw":
+        raise ValueError(f"{experiment_id} preprocessing.mode must be 'raw'")
+    category_filter_policy = config.get("category_filter", {}).get("policy")
+    if category_filter_policy != expected_filter_policy:
+        raise ValueError(
+            f"{experiment_id} category_filter.policy must be {expected_filter_policy!r}, "
+            f"got {category_filter_policy!r}"
+        )
+    _validate_common_retrieval_controls(config)
+    queries = _select_split(dataset, config)
+
+    records = []
+    for query in queries:
+        results, excluded_relevant_count = pipeline(query)
+        metrics = evaluate_query(query, results, excluded_relevant_count=excluded_relevant_count)
+        records.append(
+            {
+                "query_id": query.query_id,
+                "category": query.category,
+                "difficulty": query.difficulty,
+                "scene_type": query.scene_type,
+                "experiment_id": experiment_id,
+                "config": config,
+                "preprocessing": {
+                    "mode": "raw",
+                    "selected_bbox": None,
+                    "fallback_used": False,
+                    "fallback_reason": None,
+                },
                 "results": results,
                 "metrics": metrics,
             }

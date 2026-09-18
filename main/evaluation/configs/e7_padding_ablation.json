@@ -1,0 +1,9 @@
+{
+  "experiment_id": "E7",
+  "split": "dev",
+  "preprocessing": {"mode": "bbox", "bbox_policy": "highest_confidence", "padding_ratio": 0.1},
+  "category_filter": {"policy": "hard"},
+  "retrieval": {"top_k": 10, "dedupe": true},
+  "_bbox_policy_note": "highest_confidence is a placeholder, not a decided 'best' policy -- same as E5/E6 (IMPLEMENTATION_SPEC.md section 67 rule 7). Revisit once E1-E4 have real results.",
+  "_category_filter_note": "hard is a placeholder, not a decided 'best' filter policy -- same reasoning as the bbox policy above. Revisit once E5-E6 have real results."
+}
