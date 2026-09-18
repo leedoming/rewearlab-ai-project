@@ -1,7 +1,7 @@
 # Milestone 9 — Sensitivity Analysis: Evidence Record
 
 **Branch:** `feat/m9-sensitivity-analysis` (created from `main` after PR #1–#8 were merged)
-**PR:** _(filled in after the PR is opened)_
+**PR:** https://github.com/leedoming/rewearlab-ai-project/pull/9
 **Repository:** fork `leedoming/rewearlab-ai-project` (upstream: `GeeYun086/rewearlab-ai-project`)
 
 ---
@@ -171,4 +171,4 @@ c4b7bd7  feat: add detection-threshold/padding/Top-K sensitivity metrics
 
 ## 9. PR
 
-_(filled in after the PR is opened)_
+https://github.com/leedoming/rewearlab-ai-project/pull/9
