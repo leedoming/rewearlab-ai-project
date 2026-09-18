@@ -120,9 +120,33 @@ path is genuinely all that can be built honestly right now.
 
 ## 4. Review Findings
 
-No code review has been run against this milestone's diff yet. Will be updated (or a follow-up
-fix commit + evidence update added) if/when one is performed, per the process used for
-Milestones 1–5.
+### Review round 1
+
+A self-review pass (re-reading the diff before asking for external review) found two issues,
+both fixed in the same round:
+
+1. **Problem:** `run_category_filter_experiment()`'s "is this one of the four valid bbox
+   policies" check validated against `EXPERIMENT_BBOX_POLICIES.values()` — a dict whose actual
+   purpose is "which single policy each of E1–E4 pins to" (Milestone 5), reused here only
+   incidentally for its value set.
+   **Evidence:** if a 5th bbox policy were ever added to `retrieval.config.BBOX_SELECTION_POLICIES`
+   without also assigning it to one of E1–E4's slots, `run_category_filter_experiment()` would
+   incorrectly reject it for E5/E6, even though it's a legitimate policy.
+   **Fix:** validate directly against `retrieval.config.BBOX_SELECTION_POLICIES`, the actual
+   canonical list, instead of borrowing another dict's values.
+2. **Problem:** `run_category_filter_experiments.py`'s pipeline called
+   `resolve_label_collections()` fresh for every query, and `_make_pipeline` is rebuilt once per
+   experiment (E5, then E6) — so the same ChromaDB metadata lookup for a query's labels ran
+   twice, once per experiment, even though a query's ground-truth labels don't change between
+   E5 and E6.
+   **Evidence:** this is the exact "same expensive-ish work re-run per experiment" pattern
+   Milestone 5's `DetectionCache` was built to prevent for detection — left unaddressed here for
+   label resolution.
+   **Fix:** added a `label_collections_cache` dict, built once in `main()` and shared across
+   both experiments, mirroring the `DetectionCache` pattern already established in this file.
+
+Both fixes landed in commit `55a25b7` (see section 9); the full test suite (145 tests) was
+re-run afterward with no failures.
 
 ---
 
@@ -186,8 +210,10 @@ detection/embedding/ChromaDB calls are exercised only through fakes (`FakeCollec
 0b5828a  feat: add category filter policies (none/hard/soft)
 67af79c  feat: add E5-E6 category-filter ablation experiment runner
 a53a5be  test: cover category filtering and E5-E6 experiment runner
+2878020  docs: add milestone 6 evidence record
+55a25b7  fix: address self-review findings on the category filter experiment runner
 ```
-(This evidence document is added in a fourth, following commit — see the PR for its exact SHA.)
+(This evidence update is itself added in a further, following commit — see the PR for its exact SHA.)
 
 ## 10. PR
 
