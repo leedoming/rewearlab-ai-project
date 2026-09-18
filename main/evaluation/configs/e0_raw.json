@@ -1,0 +1,6 @@
+{
+  "experiment_id": "E0",
+  "split": "dev",
+  "preprocessing": {"mode": "raw"},
+  "retrieval": {"top_k": 10, "dedupe": true}
+}
