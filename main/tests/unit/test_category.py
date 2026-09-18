@@ -1,7 +1,10 @@
+import pytest
+
 from retrieval.category import (
     get_allowed_labels,
     get_category_from_filename,
     get_collection_name,
+    get_filtered_collections,
     is_label_allowed_for_category,
 )
 
@@ -39,6 +42,35 @@ def test_get_allowed_labels_accepts_collection_names_too():
 def test_is_label_allowed_for_category():
     assert is_label_allowed_for_category("outer", "상의") is True
     assert is_label_allowed_for_category("bottom", "상의") is False
+
+
+def test_get_filtered_collections_none_policy_searches_everything():
+    assert get_filtered_collections("top", "none") == ["pants", "top", "outer", "dress_skirts"]
+    # "none" ignores category entirely, even an unknown one.
+    assert get_filtered_collections("not_a_category", "none") == ["pants", "top", "outer", "dress_skirts"]
+
+
+def test_get_filtered_collections_hard_policy_is_exact_match_only():
+    assert get_filtered_collections("top", "hard") == ["top"]
+    assert get_filtered_collections("pants", "hard") == ["pants"]
+
+
+def test_get_filtered_collections_soft_policy_allows_adjacent_categories():
+    assert get_filtered_collections("top", "soft") == ["top", "outer"]
+    assert get_filtered_collections("outer", "soft") == ["outer", "top"]
+    # pants/dress_skirts have no adjacency in the documented soft mapping.
+    assert get_filtered_collections("pants", "soft") == ["pants"]
+
+
+def test_get_filtered_collections_unknown_category_falls_back_to_no_filter():
+    # An unrecognized category means "we don't know", not "search nothing".
+    assert get_filtered_collections("not_a_category", "hard") == ["pants", "top", "outer", "dress_skirts"]
+    assert get_filtered_collections("not_a_category", "soft") == ["pants", "top", "outer", "dress_skirts"]
+
+
+def test_get_filtered_collections_rejects_unknown_policy():
+    with pytest.raises(ValueError):
+        get_filtered_collections("top", "extreme")
 
 
 def test_get_category_from_filename():
