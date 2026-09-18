@@ -1,17 +1,33 @@
 """
 무신사 패션 이미지 유사도 검색 앱
 카테고리별 컬렉션에서 유사 아이템 검색
+
+Detection / bbox crop / ChromaDB search now delegate to the shared
+retrieval core (main/retrieval/) so this file only handles Streamlit UI.
 """
 
-import streamlit as st
-import torch
-from PIL import Image
-import numpy as np
-from transformers import AutoImageProcessor, AutoModelForObjectDetection
-import chromadb
 import logging
-import json
+import os
+import sys
+
+import streamlit as st
+from PIL import Image
 from chromadb.utils.embedding_functions import OpenCLIPEmbeddingFunction
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from retrieval import search as retrieval_search
+from retrieval.config import (
+    COLLECTION_NAMES,
+    DETECTION_MODEL,
+    DETECTION_THRESHOLD,
+    EMBEDDING_MODEL,
+    MIN_BBOX_AREA,
+)
+from retrieval.detection import detect_fashion_items as core_detect_fashion_items
+from retrieval.models import load_detection_model as core_load_detection_model
+from retrieval.preprocessing import crop_image as core_crop_image
+from retrieval.preprocessing import preprocess_image
 
 # 로깅 설정
 logging.basicConfig(
@@ -23,9 +39,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
-
-# 컬렉션 이름 리스트
-COLLECTION_NAMES = ['pants', 'top', 'outer', 'dress_skirts']
 
 # 세션 상태 초기화
 if 'image' not in st.session_state:
@@ -40,10 +53,7 @@ def load_detection_model():
     """객체 탐지 모델 로드"""
     try:
         logger.info("객체 탐지 모델 로딩 중...")
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        ckpt = 'yainage90/fashion-object-detection'
-        image_processor = AutoImageProcessor.from_pretrained(ckpt)
-        model = AutoModelForObjectDetection.from_pretrained(ckpt).to(device)
+        image_processor, model, device = core_load_detection_model(DETECTION_MODEL)
         logger.info(f"객체 탐지 모델이 {device}에 로드되었습니다.")
         return image_processor, model, device
     except Exception as e:
@@ -52,63 +62,46 @@ def load_detection_model():
 
 def crop_image(image, box):
     """바운딩 박스에 맞게 이미지 크롭"""
-    width, height = image.size
-    x1, y1, x2, y2 = [int(coord) for coord in box]
-    x1, y1 = max(0, x1), max(0, y1)
-    x2, y2 = min(width, x2), min(height, y2)
-    return image.crop((x1, y1, x2, y2))
+    return core_crop_image(image, box)
 
-def detect_fashion_items(image, min_size=100, threshold=0.4):
+def resolve_fallback_image(image, detected_items):
+    """탐지된 아이템이 없을 때 공유 fallback 메커니즘으로 원본 이미지를 사용한다.
+
+    가짜 detection을 만들지 않고, fallback_used/fallback_reason이 그대로
+    기록된 preprocessing 결과를 반환한다.
+    """
+    return preprocess_image(image, detected_items, policy="largest", fallback_policy="raw")
+
+def detect_fashion_items(image, min_size=MIN_BBOX_AREA, threshold=DETECTION_THRESHOLD):
     """
     패션 아이템 탐지 및 바운딩 박스 추출
-    
+
     Args:
         image: PIL Image
-        min_size: 최소 크기 (픽셀)
+        min_size: 최소 크기 (픽셀, area 기준)
         threshold: 탐지 신뢰도 임계값
-    
+
     Returns:
-        탐지된 아이템 리스트 (bbox, label, score 포함)
+        탐지된 아이템 리스트 (bbox, label, score, area 포함), 면적 내림차순 정렬.
+        정렬/선택은 UI 책임이며 core detect_fashion_items()는 후보만 반환한다.
     """
     try:
-        image_processor, detection_model, device = load_detection_model()
-        
-        with torch.no_grad():
-            inputs = image_processor(images=[image], return_tensors="pt")
-            outputs = detection_model(**inputs.to(device))
-            target_sizes = torch.tensor([[image.size[1], image.size[0]]])
-            results = image_processor.post_process_object_detection(
-                outputs, 
-                threshold=threshold, 
-                target_sizes=target_sizes
-            )[0]
-            
-            detected_items = []
-            
-            for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
-                label_name = detection_model.config.id2label[label.item()].lower()
-                score_value = score.item()
-                
-                x1, y1, x2, y2 = [int(coord) for coord in box]
-                
-                # 크기 필터링
-                area = (x2 - x1) * (y2 - y1)
-                if area < min_size:
-                    continue
-                
-                detected_items.append({
-                    'bbox': [x1, y1, x2, y2],
-                    'label': label_name,
-                    'score': score_value,
-                    'area': area
-                })
-            
-            # 면적 기준 내림차순 정렬
-            detected_items.sort(key=lambda x: x['area'], reverse=True)
-            
-            logger.info(f"총 {len(detected_items)}개 아이템 탐지됨")
-            return detected_items
-            
+        image_processor, model, device = load_detection_model()
+        detected_items = core_detect_fashion_items(
+            image,
+            image_processor=image_processor,
+            model=model,
+            device=device,
+            threshold=threshold,
+            min_area=min_size,
+        )
+
+        # 기존 동작 유지: 면적 기준 내림차순 정렬 후 사용자가 선택
+        detected_items.sort(key=lambda x: x['area'], reverse=True)
+
+        logger.info(f"총 {len(detected_items)}개 아이템 탐지됨")
+        return detected_items
+
     except Exception as e:
         logger.error(f"패션 아이템 탐지 중 오류: {str(e)}")
         return []
@@ -116,95 +109,62 @@ def detect_fashion_items(image, min_size=100, threshold=0.4):
 def search_similar_items(image, top_k=10, selected_collections=None):
     """
     여러 컬렉션에서 유사 아이템 검색
-    
+
     Args:
         image: PIL Image (크롭된 이미지)
         top_k: 반환할 결과 수
         selected_collections: 검색할 컬렉션 리스트 (None이면 모든 컬렉션)
-    
+
     Returns:
-        유사 아이템 리스트
+        유사 아이템 리스트 (UI 표시용으로 similarity_score가 추가된 딕셔너리)
     """
     try:
-        # 환경 변수로 ChromaDB 서버 설정 (Azure 배포용)
-        import os
         chromadb_host = os.getenv("CHROMADB_HOST", None)
         chromadb_port = int(os.getenv("CHROMADB_PORT", 8000))
-        
+        client = retrieval_search.get_chromadb_client(host=chromadb_host, port=chromadb_port)
         if chromadb_host:
-            # 원격 ChromaDB 서버 사용 (Azure 배포)
-            client = chromadb.HttpClient(host=chromadb_host, port=chromadb_port)
             logger.info(f"ChromaDB 원격 서버 연결: {chromadb_host}:{chromadb_port}")
         else:
-            # 로컬 파일 기반 ChromaDB 사용 (로컬 테스트)
-            client = chromadb.PersistentClient(path="./musinsa_fashion_db_crop")
             logger.info("ChromaDB 로컬 파일 사용: ./musinsa_fashion_db_crop")
+
         # 임베딩할 때와 동일한 모델 사용
-        embedding_function = OpenCLIPEmbeddingFunction(
-            model_name="hf-hub:Marqo/marqo-fashionSigLIP"
-        )
-        
-        # 검색할 컬렉션 결정
+        embedding_function = OpenCLIPEmbeddingFunction(model_name=EMBEDDING_MODEL)
+
         if selected_collections is None:
             selected_collections = COLLECTION_NAMES
-        
+
         logger.info(f"검색 대상 컬렉션: {selected_collections}")
-        
-        # 각 컬렉션에서 검색 수행
-        all_results = []
-        
-        for collection_name in selected_collections:
-            try:
-                collection = client.get_collection(
-                    name=collection_name,
-                    embedding_function=embedding_function
-                )
-                
-                logger.info(f"컬렉션 '{collection_name}'에서 검색 중... (총 {collection.count()}개 아이템)")
-                
-                results = collection.query(
-                    query_images=[np.array(image)],
-                    n_results=top_k,
-                    include=['metadatas', 'distances']
-                )
-                
-                if results and 'metadatas' in results and results['metadatas']:
-                    for metadata, distance in zip(results['metadatas'][0], results['distances'][0]):
-                        # 유사도 점수 계산 (거리의 역수)
-                        similarity_score = 1 / (1 + distance)
-                        
-                        item_data = metadata.copy()
-                        item_data['similarity_score'] = similarity_score * 100
-                        item_data['distance'] = float(distance)
-                        item_data['collection'] = collection_name
-                        all_results.append(item_data)
-                
-            except Exception as e:
-                logger.error(f"컬렉션 '{collection_name}' 검색 중 오류: {e}")
-                continue
-        
-        # 결과 정렬 및 중복 제거
-        seen_ids = set()
+
+        results = retrieval_search.search_collections(
+            client,
+            selected_collections,
+            query_image=image,
+            top_k=top_k,
+            embedding_function=embedding_function,
+        )
+
+        # UI 표시용 필드(similarity_score, distance, collection)를 메타데이터에 병합
+        # core search layer는 1/(1+distance) 같은 파생 점수를 반환하지 않으므로
+        # 여기(UI 계층)에서 변환한다.
         unique_results = []
-        
-        for item in sorted(all_results, key=lambda x: x['similarity_score'], reverse=True):
-            item_id = item.get('id', '') or item.get('product_id', '')
-            if item_id not in seen_ids:
-                seen_ids.add(item_id)
-                unique_results.append(item)
-                
-                if len(unique_results) >= top_k:
-                    break
-        
+        for result in results:
+            item_data = dict(result['metadata'])
+            similarity_score = 1 / (1 + result['raw_distance'])
+            item_data['similarity_score'] = similarity_score * 100
+            item_data['distance'] = result['raw_distance']
+            item_data['collection'] = result['collection']
+            unique_results.append(item_data)
+
         # 로그에 검색 결과 JSON 형태로 출력
+        import json
         logger.info("=" * 80)
         logger.info("검색 결과 (JSON)")
         logger.info("=" * 80)
         logger.info(json.dumps(unique_results, ensure_ascii=False, indent=2))
         logger.info("=" * 80)
-        
+
         return unique_results
-        
+
     except Exception as e:
         logger.error(f"검색 중 오류 발생: {e}")
         return []
@@ -214,9 +174,9 @@ def show_similar_items(similar_items):
     if not similar_items:
         st.warning("유사한 아이템을 찾지 못했습니다.")
         return
-    
+
     st.subheader(f"🔍 유사한 아이템 ({len(similar_items)}개)")
-    
+
     items_per_row = 3
     for i in range(0, len(similar_items), items_per_row):
         cols = st.columns(items_per_row)
@@ -230,33 +190,33 @@ def show_similar_items(similar_items):
                             st.image(item['image_url'], width="stretch")
                         elif 'uri' in item:
                             st.image(item['uri'], width="stretch")
-                        
+
                         # 유사도 점수
                         st.markdown(f"**유사도: {item['similarity_score']:.1f}%**")
-                        
+
                         # 상품 정보
                         st.write(f"**브랜드**: {item.get('brand', '알 수 없음')}")
-                        
+
                         name = item.get('name', '알 수 없음')
                         if len(name) > 40:
                             name = name[:37] + "..."
                         st.write(f"**제품명**: {name}")
-                        
+
                         st.write(f"**카테고리**: {item.get('category', '알 수 없음')}")
                         st.write(f"**컬렉션**: {item.get('collection', '알 수 없음')}")
                         st.write(f"**가격**: {item.get('price', '알 수 없음')}원")
-                        
+
                         # 탐지 라벨
                         detected_label = item.get('detected_label', 'original')
                         if detected_label != 'original':
                             st.write(f"**탐지 라벨**: {detected_label}")
-                        
+
                         # 상품 URL
                         if 'product_url' in item and item['product_url']:
                             st.markdown(f"[무신사에서 보기]({item['product_url']})")
-                        
+
                         st.divider()
-                        
+
                     except Exception as e:
                         logger.error(f"아이템 표시 중 오류: {e}")
                         st.error("이 아이템을 표시하는 중 오류가 발생했습니다")
@@ -264,7 +224,7 @@ def show_similar_items(similar_items):
 def main():
     st.set_page_config(layout="wide")
     st.title("🛍️ 무신사 패션 이미지 검색")
-    
+
     st.markdown("""
     ### 사용 방법
     1. 패션 이미지를 업로드하세요
@@ -273,15 +233,15 @@ def main():
     4. 검색할 카테고리를 선택하세요
     5. 유사한 아이템을 찾습니다
     """)
-    
+
     # 사이드바 옵션
     with st.sidebar:
         st.header("검색 옵션")
-        
+
         # 검색할 컬렉션 선택
         st.subheader("검색 카테고리")
         selected_collections = []
-        
+
         if st.checkbox("바지 (pants)", value=True):
             selected_collections.append('pants')
         if st.checkbox("상의 (top)", value=True):
@@ -290,10 +250,10 @@ def main():
             selected_collections.append('outer')
         if st.checkbox("원피스/스커트 (dress_skirts)", value=True):
             selected_collections.append('dress_skirts')
-        
+
         if not selected_collections:
             st.warning("최소 1개 이상의 카테고리를 선택하세요")
-        
+
         # 결과 수
         num_results = st.slider(
             "검색 결과 수",
@@ -302,7 +262,7 @@ def main():
             value=9,
             help="표시할 유사 아이템 개수"
         )
-        
+
         # 탐지 옵션
         st.subheader("탐지 옵션")
         detection_threshold = st.slider(
@@ -313,84 +273,111 @@ def main():
             step=0.1,
             help="낮을수록 더 많은 객체 탐지"
         )
-    
+
     # 파일 업로더
     uploaded_file = st.file_uploader(
         "패션 이미지 업로드",
         type=['png', 'jpg', 'jpeg'],
         help="의류가 포함된 이미지를 업로드하세요"
     )
-    
+
     if uploaded_file is not None:
         # 이미지 로드
         image = Image.open(uploaded_file).convert('RGB')
-        
+
         col1, col2 = st.columns([1, 1])
-        
+
         with col1:
             st.subheader("업로드된 이미지")
             st.image(image, width="stretch")
-        
+
         # 의류 감지
         with st.spinner("의류 영역 감지 중..."):
             detected_items = detect_fashion_items(
-                image, 
+                image,
                 threshold=detection_threshold
             )
-        
-        if not detected_items:
+
+        if detected_items:
+            # 정상 탐지 케이스: 후보를 보여주고 사용자가 직접 아이템을 선택한다
+            # (기존 수동 선택 UX 유지).
+            with col2:
+                st.subheader(f"감지된 의류 아이템 ({len(detected_items)}개)")
+
+                # 감지된 영역 미리보기
+                preview_cols = st.columns(min(len(detected_items), 3))
+                for idx, (item, preview_col) in enumerate(zip(detected_items[:3], preview_cols)):
+                    bbox = item['bbox']
+                    cropped = crop_image(image, bbox)
+                    with preview_col:
+                        st.image(cropped, width="stretch")
+                        st.caption(f"{item['label']} ({item['score']:.2f})")
+
+            # 아이템 선택
+            st.write("---")
+
+            col_select, col_search = st.columns([2, 1])
+
+            with col_select:
+                selected_idx = st.selectbox(
+                    "검색할 아이템 선택:",
+                    range(len(detected_items)),
+                    format_func=lambda x: f"아이템 {x + 1} - {detected_items[x]['label']} (신뢰도: {detected_items[x]['score']:.2f})"
+                )
+
+            with col_search:
+                st.write("")  # 공간 맞추기
+                st.write("")
+                search_button = st.button(
+                    "🔍 유사 아이템 검색",
+                    type="primary",
+                    use_container_width=True
+                )
+
+            # 선택된 아이템 표시
+            selected_item = detected_items[selected_idx]
+            cropped_image = crop_image(image, selected_item['bbox'])
+
+            st.subheader("선택된 아이템")
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(cropped_image, width="stretch")
+                st.caption(f"{selected_item['label']} (신뢰도: {selected_item['score']:.2f})")
+
+        else:
+            # 탐지된 아이템이 없는 케이스: 가짜 detection을 만들지 않고, 공유
+            # fallback 메커니즘(raw fallback)을 통해 원본 이미지를 사용한다.
+            # fallback_used/fallback_reason이 그대로 기록되어 failure analysis에서
+            # 이 경로를 추적할 수 있다. 선택할 후보가 없으므로 미리보기/선택박스는
+            # 표시하지 않는다.
+            cropped_image, preprocessing_metadata = resolve_fallback_image(image, detected_items)
+            logger.info(
+                f"탐지된 아이템 없음 - fallback 적용: "
+                f"mode={preprocessing_metadata['mode']}, "
+                f"reason={preprocessing_metadata['fallback_reason']}"
+            )
+
+            st.subheader("감지된 의류 아이템 (0개)")
             st.warning("⚠️ 의류 아이템을 찾지 못했습니다. 원본 이미지로 검색합니다.")
-            detected_items = [{
-                'bbox': [0, 0, image.size[0], image.size[1]],
-                'label': 'original',
-                'score': 0.0,
-                'area': image.size[0] * image.size[1]
-            }]
-        
-        with col2:
-            st.subheader(f"감지된 의류 아이템 ({len(detected_items)}개)")
-            
-            # 감지된 영역 미리보기
-            preview_cols = st.columns(min(len(detected_items), 3))
-            for idx, (item, preview_col) in enumerate(zip(detected_items[:3], preview_cols)):
-                bbox = item['bbox']
-                cropped = crop_image(image, bbox)
-                with preview_col:
-                    st.image(cropped, width="stretch")
-                    st.caption(f"{item['label']} ({item['score']:.2f})")
-        
-        # 아이템 선택
-        st.write("---")
-        
-        col_select, col_search = st.columns([2, 1])
-        
-        with col_select:
-            selected_idx = st.selectbox(
-                "검색할 아이템 선택:",
-                range(len(detected_items)),
-                format_func=lambda x: f"아이템 {x + 1} - {detected_items[x]['label']} (신뢰도: {detected_items[x]['score']:.2f})"
-            )
-        
-        with col_search:
-            st.write("")  # 공간 맞추기
-            st.write("")
-            search_button = st.button(
-                "🔍 유사 아이템 검색",
-                type="primary",
-                use_container_width=True
-            )
-        
-        # 선택된 아이템 표시
-        selected_item = detected_items[selected_idx]
-        selected_bbox = selected_item['bbox']
-        cropped_image = crop_image(image, selected_bbox)
-        
-        st.subheader("선택된 아이템")
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.image(cropped_image, width="stretch")
-            st.caption(f"{selected_item['label']} (신뢰도: {selected_item['score']:.2f})")
-        
+
+            st.write("---")
+
+            _, col_search = st.columns([2, 1])
+            with col_search:
+                st.write("")
+                st.write("")
+                search_button = st.button(
+                    "🔍 유사 아이템 검색",
+                    type="primary",
+                    use_container_width=True
+                )
+
+            st.subheader("선택된 아이템")
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(cropped_image, width="stretch")
+                st.caption("원본 이미지 (탐지된 아이템 없음)")
+
         # 검색 실행
         if search_button:
             if not selected_collections:
@@ -402,12 +389,12 @@ def main():
                         top_k=num_results,
                         selected_collections=selected_collections
                     )
-                
+
                 st.write("---")
-                
+
                 if similar_items:
                     show_similar_items(similar_items)
-                    
+
                     # 통계 표시
                     st.write("---")
                     st.write("### 📊 검색 통계")
@@ -422,10 +409,10 @@ def main():
                         st.metric("최고 유사도", f"{max_similarity:.1f}%")
                 else:
                     st.warning("유사한 아이템을 찾지 못했습니다.")
-    
+
     else:
         st.info("👆 이미지를 업로드하여 검색을 시작하세요")
-    
+
     # 하단 정보
     st.write("---")
     st.markdown("""
