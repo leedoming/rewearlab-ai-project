@@ -1,15 +1,19 @@
 """Load and validate the human-authored retrieval evaluation dataset.
 
-Only the Python standard library is used. Validation intentionally focuses on
-errors that would make experiment results misleading: duplicate query IDs,
+No third-party dependency is used. Validation intentionally focuses on errors
+that would make experiment results misleading: duplicate query IDs,
 invalid controlled values, missing query images, unknown label query IDs, and
 relevance grades outside the documented 0/1/2 scale.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 import csv
 import json
 from pathlib import Path
+from types import MappingProxyType
+
+from retrieval.config import COLLECTION_NAMES
 
 
 DIFFICULTIES = {"easy", "medium", "hard"}
@@ -22,6 +26,7 @@ SCENE_TYPES = {
 }
 SPLITS = {"dev", "holdout"}
 RELEVANCE_GRADES = {0, 1, 2}
+CATEGORIES = frozenset(COLLECTION_NAMES)
 REQUIRED_COLUMNS = {
     "query_id",
     "image_path",
@@ -50,7 +55,7 @@ class QueryRecord:
     num_visible_items: int
     background_complexity: str
     important_features: tuple[str, ...]
-    labels: dict[str, int]
+    labels: Mapping[str, int]
 
 
 @dataclass(frozen=True)
@@ -124,11 +129,15 @@ def _parse_manifest(manifest_path, require_images):
                 for feature in (row.get("important_features") or "").split("|")
                 if feature.strip()
             )
+            category = _require_text(row, "category", query_id)
+            if category not in CATEGORIES:
+                raise DatasetValidationError(f"{query_id}: invalid category {category!r}")
+
             rows.append(
                 {
                     "query_id": query_id,
                     "image_path": image_path,
-                    "category": _require_text(row, "category", query_id),
+                    "category": category,
                     "difficulty": difficulty,
                     "scene_type": scene_type,
                     "split": split,
@@ -146,6 +155,8 @@ def _parse_labels(labels_path, manifest_ids):
     with labels_path.open(encoding="utf-8") as file:
         document = json.load(file)
 
+    if not isinstance(document, dict):
+        raise DatasetValidationError("labels root must be an object")
     version = document.get("dataset_version")
     if not isinstance(version, str) or not version.strip():
         raise DatasetValidationError("labels.dataset_version must be a non-empty string")
@@ -160,6 +171,11 @@ def _parse_labels(labels_path, manifest_ids):
         raise DatasetValidationError(
             f"labels contain query IDs absent from manifest: {sorted(unknown_ids)}"
         )
+    missing_ids = manifest_ids - set(query_labels)
+    if missing_ids:
+        raise DatasetValidationError(
+            f"manifest query IDs missing from labels: {sorted(missing_ids)}"
+        )
 
     parsed = {}
     for query_id, entries in query_labels.items():
@@ -173,6 +189,7 @@ def _parse_labels(labels_path, manifest_ids):
             relevance = entry.get("relevance")
             if not isinstance(product_id, str) or not product_id.strip():
                 raise DatasetValidationError(f"{query_id}: product_id must be non-empty")
+            product_id = product_id.strip()
             if product_id in products:
                 raise DatasetValidationError(f"{query_id}: duplicate product_id {product_id!r}")
             if (
@@ -207,7 +224,7 @@ def load_dataset(dataset_dir, require_images=True):
     manifest_ids = {row["query_id"] for row in manifest_rows}
     version, labels = _parse_labels(labels_path, manifest_ids)
     queries = tuple(
-        QueryRecord(**row, labels=labels.get(row["query_id"], {}))
+        QueryRecord(**row, labels=MappingProxyType(labels[row["query_id"]]))
         for row in manifest_rows
     )
     return EvaluationDataset(version=version, pooled_ground_truth=True, queries=queries)

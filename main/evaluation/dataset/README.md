@@ -10,7 +10,8 @@ CSV/JSON은 의도적으로 비어 있다. 실제 이미지나 관련도 판단�
 착용 사진, 다중 의류, 복잡한 배경, 가림이 있는 사례도 포함한다.
 
 - `image_path`: 이 폴더 기준 상대 경로. 권장 형식은 `queries/Q001.jpg`.
-- `category`: 서비스가 사용하는 query 카테고리.
+- `category`: 서비스 collection과 동일한 `pants`, `top`, `outer`,
+  `dress_skirts` 중 하나.
 - `difficulty`: `easy`, `medium`, `hard`.
 - `scene_type`: `clean_product`, `person_wearing`, `multi_item`,
   `complex_background`, `occluded`.
@@ -24,6 +25,8 @@ CSV/JSON은 의도적으로 비어 있다. 실제 이미지나 관련도 판단�
 ## Relevance labels
 
 `labels.json`은 query별 후보 상품의 관련도를 저장한다.
+Manifest의 모든 query는 labels에 명시적으로 존재해야 한다. 아직 관련 후보가 없다고
+판단한 경우에도 해당 query를 생략하지 말고 빈 배열(`"Q001": []`)로 기록한다.
 
 - `0`: 관련 없음 — 카테고리나 핵심 형태가 다름.
 - `1`: 관련 있음 — 카테고리와 실루엣이 유사하지만 핵심 디테일 일부가 다름.
