@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RE:WEAR Lab pooled relevance labels",
+  "type": "object",
+  "required": ["dataset_version", "pooled_ground_truth", "queries"],
+  "additionalProperties": false,
+  "properties": {
+    "dataset_version": {"type": "string", "minLength": 1},
+    "pooled_ground_truth": {"const": true},
+    "queries": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["product_id", "relevance"],
+          "additionalProperties": false,
+          "properties": {
+            "product_id": {"type": "string", "minLength": 1},
+            "relevance": {"type": "integer", "enum": [0, 1, 2]}
+          }
+        }
+      }
+    }
+  }
+}
