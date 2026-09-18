@@ -74,3 +74,29 @@ FALLBACK_POLICIES = ("raw", "largest", "fail")
 DEFAULT_FALLBACK_POLICY = "raw"
 
 DEFAULT_PADDING_RATIO = 0.0
+
+# --- Category filtering (which collections to search) -------------------
+# IMPLEMENTATION_SPEC.md section 21 (Phase 5 - Category Filtering).
+# This is a distinct concern from CATEGORY_LABEL_MAPPING/COLLECTION_LABEL_MAPPING
+# above, which decide which *detection labels* are compatible with a
+# category for bbox selection. This decides which *ChromaDB collections*
+# get searched at all, given the query's category.
+
+CATEGORY_FILTER_POLICIES = ("none", "hard", "soft")
+DEFAULT_CATEGORY_FILTER_POLICY = "none"
+
+# "hard": search only the one collection matching the category exactly.
+HARD_CATEGORY_FILTER_MAPPING = {name: [name] for name in COLLECTION_NAMES}
+
+# "soft": also allow visually-adjacent categories (top/outer overlap in
+# practice; pants and dress_skirts don't overlap with anything as much).
+# From IMPLEMENTATION_SPEC.md section 21's example mapping. This is a
+# documented initial hypothesis, not a decision backed by evaluation
+# evidence yet (section 21: "이는 최초 hypothesis이며 프로젝트 목적에 맞춰
+# 문서화 후 조정 가능하다").
+SOFT_CATEGORY_FILTER_MAPPING = {
+    "pants": ["pants"],
+    "top": ["top", "outer"],
+    "outer": ["outer", "top"],
+    "dress_skirts": ["dress_skirts"],
+}
