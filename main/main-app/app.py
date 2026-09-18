@@ -9,8 +9,6 @@ from PIL import Image
 import io
 import os
 import sys
-import numpy as np
-import chromadb
 import logging
 from openai import AzureOpenAI
 import base64

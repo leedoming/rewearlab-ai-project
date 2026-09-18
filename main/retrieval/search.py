@@ -6,7 +6,11 @@ explicitly forbids using `1 / (1 + distance)` as an evaluation score in
 core logic; any such display conversion belongs in the UI layer.
 """
 
+import logging
+
 from .config import DEFAULT_CHROMADB_PORT, DEFAULT_LOCAL_DB_PATH
+
+logger = logging.getLogger(__name__)
 
 
 def get_chromadb_client(host=None, port=DEFAULT_CHROMADB_PORT, local_path=DEFAULT_LOCAL_DB_PATH):
@@ -73,6 +77,8 @@ def search_collection(
     else:
         collection = client.get_collection(name=collection_name)
 
+    logger.info(f"컬렉션 '{collection_name}'에서 검색 중... (총 {collection.count()}개 아이템)")
+
     if query_image is not None:
         raw_results = collection.query(
             query_images=[np.array(query_image)],
@@ -103,8 +109,9 @@ def search_collections(
     Mirrors the existing "each collection top-K -> merge -> global top-K"
     behavior (IMPLEMENTATION_SPEC.md section 17), ranked by raw distance
     (ascending: smaller distance = more similar) rather than any derived
-    score. A collection that raises is skipped, matching the existing
-    per-collection try/except behavior.
+    score. A collection that raises is logged and skipped so the remaining
+    collections still get searched, matching the existing per-collection
+    try/except/log behavior.
     """
     all_results = []
     for collection_name in collection_names:
@@ -119,7 +126,8 @@ def search_collections(
                     embedding_function=embedding_function,
                 )
             )
-        except Exception:
+        except Exception as exc:
+            logger.error(f"컬렉션 '{collection_name}' 검색 중 오류: {exc}")
             continue
 
     all_results.sort(key=lambda r: r["raw_distance"])

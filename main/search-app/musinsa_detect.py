@@ -27,6 +27,7 @@ from retrieval.config import (
 from retrieval.detection import detect_fashion_items as core_detect_fashion_items
 from retrieval.models import load_detection_model as core_load_detection_model
 from retrieval.preprocessing import crop_image as core_crop_image
+from retrieval.preprocessing import preprocess_image
 
 # 로깅 설정
 logging.basicConfig(
@@ -62,6 +63,14 @@ def load_detection_model():
 def crop_image(image, box):
     """바운딩 박스에 맞게 이미지 크롭"""
     return core_crop_image(image, box)
+
+def resolve_fallback_image(image, detected_items):
+    """탐지된 아이템이 없을 때 공유 fallback 메커니즘으로 원본 이미지를 사용한다.
+
+    가짜 detection을 만들지 않고, fallback_used/fallback_reason이 그대로
+    기록된 preprocessing 결과를 반환한다.
+    """
+    return preprocess_image(image, detected_items, policy="largest", fallback_policy="raw")
 
 def detect_fashion_items(image, min_size=MIN_BBOX_AREA, threshold=DETECTION_THRESHOLD):
     """
@@ -289,58 +298,82 @@ def main():
                 threshold=detection_threshold
             )
 
-        if not detected_items:
-            st.warning("⚠️ 의류 아이템을 찾지 못했습니다. 원본 이미지로 검색합니다.")
-            detected_items = [{
-                'bbox': [0, 0, image.size[0], image.size[1]],
-                'label': 'original',
-                'score': 0.0,
-                'area': image.size[0] * image.size[1]
-            }]
+        if detected_items:
+            # 정상 탐지 케이스: 후보를 보여주고 사용자가 직접 아이템을 선택한다
+            # (기존 수동 선택 UX 유지).
+            with col2:
+                st.subheader(f"감지된 의류 아이템 ({len(detected_items)}개)")
 
-        with col2:
-            st.subheader(f"감지된 의류 아이템 ({len(detected_items)}개)")
+                # 감지된 영역 미리보기
+                preview_cols = st.columns(min(len(detected_items), 3))
+                for idx, (item, preview_col) in enumerate(zip(detected_items[:3], preview_cols)):
+                    bbox = item['bbox']
+                    cropped = crop_image(image, bbox)
+                    with preview_col:
+                        st.image(cropped, width="stretch")
+                        st.caption(f"{item['label']} ({item['score']:.2f})")
 
-            # 감지된 영역 미리보기
-            preview_cols = st.columns(min(len(detected_items), 3))
-            for idx, (item, preview_col) in enumerate(zip(detected_items[:3], preview_cols)):
-                bbox = item['bbox']
-                cropped = crop_image(image, bbox)
-                with preview_col:
-                    st.image(cropped, width="stretch")
-                    st.caption(f"{item['label']} ({item['score']:.2f})")
+            # 아이템 선택
+            st.write("---")
 
-        # 아이템 선택
-        st.write("---")
+            col_select, col_search = st.columns([2, 1])
 
-        col_select, col_search = st.columns([2, 1])
+            with col_select:
+                selected_idx = st.selectbox(
+                    "검색할 아이템 선택:",
+                    range(len(detected_items)),
+                    format_func=lambda x: f"아이템 {x + 1} - {detected_items[x]['label']} (신뢰도: {detected_items[x]['score']:.2f})"
+                )
 
-        with col_select:
-            selected_idx = st.selectbox(
-                "검색할 아이템 선택:",
-                range(len(detected_items)),
-                format_func=lambda x: f"아이템 {x + 1} - {detected_items[x]['label']} (신뢰도: {detected_items[x]['score']:.2f})"
+            with col_search:
+                st.write("")  # 공간 맞추기
+                st.write("")
+                search_button = st.button(
+                    "🔍 유사 아이템 검색",
+                    type="primary",
+                    use_container_width=True
+                )
+
+            # 선택된 아이템 표시
+            selected_item = detected_items[selected_idx]
+            cropped_image = crop_image(image, selected_item['bbox'])
+
+            st.subheader("선택된 아이템")
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(cropped_image, width="stretch")
+                st.caption(f"{selected_item['label']} (신뢰도: {selected_item['score']:.2f})")
+
+        else:
+            # 탐지된 아이템이 없는 케이스: 가짜 detection을 만들지 않고, 공유
+            # fallback 메커니즘(raw fallback)을 통해 원본 이미지를 사용한다.
+            # fallback_used/fallback_reason이 그대로 기록되어 failure analysis에서
+            # 이 경로를 추적할 수 있다. 선택할 후보가 없으므로 미리보기/선택박스는
+            # 표시하지 않는다.
+            cropped_image, preprocessing_metadata = resolve_fallback_image(image, detected_items)
+            logger.info(
+                f"탐지된 아이템 없음 - fallback 적용: "
+                f"mode={preprocessing_metadata['mode']}, "
+                f"reason={preprocessing_metadata['fallback_reason']}"
             )
 
-        with col_search:
-            st.write("")  # 공간 맞추기
-            st.write("")
+            with col2:
+                st.subheader("감지된 의류 아이템 (0개)")
+                st.warning("⚠️ 의류 아이템을 찾지 못했습니다. 원본 이미지로 검색합니다.")
+
+            st.write("---")
+
             search_button = st.button(
                 "🔍 유사 아이템 검색",
                 type="primary",
                 use_container_width=True
             )
 
-        # 선택된 아이템 표시
-        selected_item = detected_items[selected_idx]
-        selected_bbox = selected_item['bbox']
-        cropped_image = crop_image(image, selected_bbox)
-
-        st.subheader("선택된 아이템")
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.image(cropped_image, width="stretch")
-            st.caption(f"{selected_item['label']} (신뢰도: {selected_item['score']:.2f})")
+            st.subheader("선택된 아이템")
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(cropped_image, width="stretch")
+                st.caption("원본 이미지 (탐지된 아이템 없음)")
 
         # 검색 실행
         if search_button:

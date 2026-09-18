@@ -10,6 +10,37 @@ from .config import DETECTION_MODEL, DETECTION_THRESHOLD, MIN_BBOX_AREA
 from .models import load_detection_model
 
 
+def _resolve_detection_components(image_processor, model, device, model_name):
+    """Resolve (image_processor, model, device) per detect_fashion_items' contract.
+
+    - image_processor and model both omitted: lazily load all three via
+      `model_name` (device is passed through, possibly None, to
+      `load_detection_model`, which resolves a default).
+    - image_processor and model both supplied, device omitted: infer the
+      device from the model's own parameters rather than silently leaving
+      it None.
+    - image_processor and model both supplied, device supplied: use as-is.
+    - Only one of image_processor/model supplied: this is an inconsistent,
+      unresolvable combination (no correct guess for the other), so this
+      raises ValueError instead of silently discarding the supplied one or
+      guessing a replacement.
+    """
+    if image_processor is None and model is None:
+        return load_detection_model(model_name, device)
+
+    if image_processor is None or model is None:
+        raise ValueError(
+            "detect_fashion_items requires image_processor and model to be "
+            "supplied together (both or neither); got "
+            f"image_processor={image_processor!r}, model={model!r}"
+        )
+
+    if device is None:
+        device = next(model.parameters()).device
+
+    return image_processor, model, device
+
+
 def detect_fashion_items(
     image,
     image_processor=None,
@@ -25,8 +56,13 @@ def detect_fashion_items(
         image: PIL Image.
         image_processor, model, device: pre-loaded detection model
             components (see `retrieval.models.load_detection_model`).
-            If any is None, the model is loaded on demand using
-            `model_name`.
+            Contract (see `_resolve_detection_components`):
+              - omit all three to lazily load them via `model_name`;
+              - or supply image_processor and model together, in which
+                case device is optional and inferred from the model's own
+                parameters when omitted;
+              - supplying only one of image_processor/model raises
+                ValueError rather than guessing.
         threshold: detection confidence threshold.
         min_area: minimum bbox area (width * height) in pixels; smaller
             detections are discarded.
@@ -37,10 +73,11 @@ def detect_fashion_items(
         label (str), score (float), area (int). Unsorted, unfiltered by
         category — every detection that passes `threshold`/`min_area`.
     """
-    import torch
+    image_processor, model, device = _resolve_detection_components(
+        image_processor, model, device, model_name
+    )
 
-    if image_processor is None or model is None:
-        image_processor, model, device = load_detection_model(model_name, device)
+    import torch
 
     with torch.no_grad():
         inputs = image_processor(images=[image], return_tensors="pt")
