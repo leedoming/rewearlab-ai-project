@@ -59,6 +59,34 @@ def test_both_supplied_with_device_uses_it_as_is():
     assert resolved_device == "explicit-cpu"
 
 
+def test_parameterless_model_uses_shared_default_device_resolver(monkeypatch):
+    import retrieval.detection as detection_module
+
+    class ParameterlessModel:
+        def parameters(self):
+            return iter(())
+
+    monkeypatch.setattr(detection_module, "_resolve_device", lambda: "default-cpu")
+
+    _, _, resolved_device = _resolve_detection_components(
+        object(), ParameterlessModel(), None, "unused-model-name"
+    )
+
+    assert resolved_device == "default-cpu"
+
+
+def test_non_module_model_uses_shared_default_device_resolver(monkeypatch):
+    import retrieval.detection as detection_module
+
+    monkeypatch.setattr(detection_module, "_resolve_device", lambda: "default-cpu")
+
+    _, _, resolved_device = _resolve_detection_components(
+        object(), object(), None, "unused-model-name"
+    )
+
+    assert resolved_device == "default-cpu"
+
+
 def test_only_image_processor_supplied_raises():
     with pytest.raises(ValueError):
         _resolve_detection_components(object(), None, None, "unused-model-name")

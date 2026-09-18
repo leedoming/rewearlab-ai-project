@@ -9,7 +9,7 @@ import logging
 
 import pytest
 
-from retrieval.search import search_collections
+from retrieval.search import search_collection, search_collections
 
 
 class FakeCollection:
@@ -63,6 +63,18 @@ def test_search_collection_logs_item_count_diagnostic(caplog):
         search_collections(client, ["top"], query_embedding=[0.0], top_k=10)
 
     assert any("top" in record.message and "42" in record.message for record in caplog.records)
+
+
+def test_search_collection_rejects_both_query_inputs():
+    client = FakeClient({"top": FakeCollection()})
+
+    with pytest.raises(ValueError, match="Exactly one"):
+        search_collection(
+            client,
+            "top",
+            query_embedding=[0.0],
+            query_image=object(),
+        )
 
 
 def test_dedupe_true_collapses_duplicate_product_ids_across_collections():

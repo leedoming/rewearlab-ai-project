@@ -37,6 +37,16 @@ def _install_fake_chromadb(monkeypatch):
     monkeypatch.setitem(sys.modules, "chromadb.utils", utils_mod)
     monkeypatch.setitem(sys.modules, "chromadb.utils.embedding_functions", embedding_functions_mod)
 
+    streamlit_mod = types.ModuleType("streamlit")
+
+    class FakeSessionState(dict):
+        __getattr__ = dict.get
+        __setattr__ = dict.__setitem__
+
+    streamlit_mod.session_state = FakeSessionState()
+    streamlit_mod.cache_resource = lambda function: function
+    monkeypatch.setitem(sys.modules, "streamlit", streamlit_mod)
+
 
 def _import_musinsa_detect(monkeypatch, tmp_path):
     _install_fake_chromadb(monkeypatch)

@@ -357,17 +357,20 @@ def main():
                 f"reason={preprocessing_metadata['fallback_reason']}"
             )
 
-            with col2:
-                st.subheader("감지된 의류 아이템 (0개)")
-                st.warning("⚠️ 의류 아이템을 찾지 못했습니다. 원본 이미지로 검색합니다.")
+            st.subheader("감지된 의류 아이템 (0개)")
+            st.warning("⚠️ 의류 아이템을 찾지 못했습니다. 원본 이미지로 검색합니다.")
 
             st.write("---")
 
-            search_button = st.button(
-                "🔍 유사 아이템 검색",
-                type="primary",
-                use_container_width=True
-            )
+            _, col_search = st.columns([2, 1])
+            with col_search:
+                st.write("")
+                st.write("")
+                search_button = st.button(
+                    "🔍 유사 아이템 검색",
+                    type="primary",
+                    use_container_width=True
+                )
 
             st.subheader("선택된 아이템")
             col1, col2, col3 = st.columns([1, 2, 1])

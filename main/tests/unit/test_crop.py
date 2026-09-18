@@ -49,3 +49,8 @@ def test_crop_with_padding_expands_and_still_clamps():
 def test_crop_with_zero_padding_matches_no_padding_arg():
     image = make_image()
     assert crop_image(image, [10, 10, 40, 40]).size == crop_image(image, [10, 10, 40, 40], padding_ratio=0.0).size
+
+
+def test_crop_rejects_negative_padding():
+    with pytest.raises(ValueError, match="padding_ratio"):
+        crop_image(make_image(), [10, 10, 40, 40], padding_ratio=-0.5)

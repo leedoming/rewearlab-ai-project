@@ -7,7 +7,7 @@ section 6: "Detection function은 bbox 선택까지 수행하지 않는다.").
 """
 
 from .config import DETECTION_MODEL, DETECTION_THRESHOLD, MIN_BBOX_AREA
-from .models import load_detection_model
+from .models import _resolve_device, load_detection_model
 
 
 def _resolve_detection_components(image_processor, model, device, model_name):
@@ -36,7 +36,13 @@ def _resolve_detection_components(image_processor, model, device, model_name):
         )
 
     if device is None:
-        device = next(model.parameters()).device
+        device = getattr(model, "device", None)
+        if device is None:
+            parameters = getattr(model, "parameters", None)
+            first_parameter = next(parameters(), None) if callable(parameters) else None
+            device = getattr(first_parameter, "device", None)
+        if device is None:
+            device = _resolve_device()
 
     return image_processor, model, device
 

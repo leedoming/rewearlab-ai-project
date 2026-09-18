@@ -72,6 +72,9 @@ def crop_image(image, bbox, padding_ratio=0.0):
     helpers in musinsa_to_chromadb.py / musinsa_detect.py / app.py, which
     had no padding support).
     """
+    if padding_ratio < 0:
+        raise ValueError("padding_ratio must be non-negative")
+
     width, height = image.size
     x1, y1, x2, y2 = [float(coord) for coord in bbox]
 

@@ -120,6 +120,22 @@ candidate, using the repository's `code-review` skill at "high" effort.
 None of the review's findings concerned fabricated benchmark numbers, performance claims, or
 policy decisions — this milestone made none of those claims.
 
+### 3.3 Review round 2
+
+A second review reported ten findings. Findings 1–6 were confirmed as correctness or
+behavior-preservation bugs and fixed: safe device resolution for parameterless/non-module
+models; mutual exclusivity of search query inputs; rejection of negative crop padding;
+restoration of the DB embedding pipeline's positive-score floor; and restoration of the
+no-detection warning/button layout in the search app. Finding 7 (divergent device-resolution
+logic) was fixed together with finding 1 by reusing `models._resolve_device` as the final
+fallback.
+
+Findings 8–10 were deferred as lower-priority refactoring/efficiency work: consolidating the
+fallback-image helper across both apps, removing the diagnostic `collection.count()` round
+trip, and deduplicating the selected-item display block. The count call remains because the
+first review explicitly restored that pre-refactor diagnostic; changing it now would require
+an intentional observability-versus-latency decision rather than a correctness patch.
+
 ---
 
 ## 4. Fixes Made
@@ -225,6 +241,12 @@ policy decisions — this milestone made none of those claims.
 | `main/tests/unit/test_search.py` *(added during fix round)* | collection failure isolation+logging, diagnostic logging, dedupe True/False, top-k truncation/ranking |
 | `main/tests/unit/test_search_app_fallback.py` *(added during fix round)* | search-app's no-detection path delegates to the shared fallback mechanism |
 
+Review round 2 extended these tests with parameterless/non-module device resolution,
+negative-padding rejection, both-query-input rejection, and a dependency-independent
+Streamlit stub for the search-app fallback tests. The positive-score floor and the two UI
+layout restorations were validated by source review plus the full compile check; no model or
+interactive Streamlit runtime was available for an end-to-end UI test.
+
 ---
 
 ## 6. Exact Validation Commands and Results
@@ -244,6 +266,7 @@ cd main && python -m pytest tests/unit -q
 ```
 Result (after initial refactor, before fixes): `28 passed in 0.12s`
 Result (after fix commits `e1e0c95`, `de47295`): `41 passed in 1.05s`
+Result (after review round 2): `45 passed in 1.59s`
 
 Test environment: Python 3.13.1, pytest 9.1.1, on Windows. `torch`, `chromadb`,
 `transformers`, and `open_clip` are **not installed** in this environment — confirmed via

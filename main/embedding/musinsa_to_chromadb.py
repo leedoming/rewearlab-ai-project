@@ -154,7 +154,7 @@ def detect_and_crop_fashion_items(image, category, image_processor, detection_mo
             fallback_policy="raw",
         )
 
-        if metadata["fallback_used"]:
+        if metadata["fallback_used"] or metadata["detection_score"] <= 0.0:
             return None
 
         return {

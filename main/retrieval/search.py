@@ -69,8 +69,8 @@ def search_collection(
     """
     import numpy as np
 
-    if query_embedding is None and query_image is None:
-        raise ValueError("Either query_embedding or query_image must be provided")
+    if (query_embedding is None) == (query_image is None):
+        raise ValueError("Exactly one of query_embedding or query_image must be provided")
 
     if embedding_function is not None:
         collection = client.get_collection(name=collection_name, embedding_function=embedding_function)
