@@ -7,6 +7,7 @@ from pathlib import Path
 from retrieval.config import BBOX_SELECTION_POLICIES, CATEGORY_FILTER_POLICIES
 
 from .aggregate import aggregate_metrics
+from .failure_analysis import classify_failure, is_poor_query, summarize_failures
 from .metrics import (
     incompatible_category_rate_at_k,
     mrr,
@@ -133,11 +134,38 @@ def _write_experiment_outputs(records, output_dir, dataset, config, experiment_i
                 }
             )
 
+    # IMPLEMENTATION_SPEC.md section 36 lists failure_cases.jsonl as one of
+    # every experiment's four required outputs, alongside section 32's MUST
+    # for a per-experiment failure distribution -- neither existed before
+    # Milestone 8 (see milestone-8.md section 2.1). Both are produced here,
+    # in the one function every experiment runner (E0-E8) already shares,
+    # rather than duplicated per runner.
+    failure_cases = []
+    for record in records:
+        labels = dataset.by_id(record["query_id"]).labels
+        if not is_poor_query(record["metrics"], record["results"], labels):
+            continue
+        failure_cases.append(
+            {
+                "query_id": record["query_id"],
+                "experiment_id": record["experiment_id"],
+                "primary_failure": classify_failure(record["preprocessing"], record["metrics"]),
+                "secondary_failures": [],
+                "notes": "",
+                "evidence": {},
+            }
+        )
+
+    with (output_dir / "failure_cases.jsonl").open("w", encoding="utf-8") as file:
+        for case in failure_cases:
+            file.write(json.dumps(case, ensure_ascii=False) + "\n")
+
     summary = {
         "experiment_id": experiment_id,
         "dataset_version": dataset.version,
         "config": config,
         **aggregate_metrics(records),
+        "failure_distribution": summarize_failures(case["primary_failure"] for case in failure_cases),
     }
     (output_dir / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
