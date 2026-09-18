@@ -1,7 +1,7 @@
 # Milestone 8 — Failure Analysis: Evidence Record
 
 **Branch:** `feat/m8-failure-analysis` (created from `main` after PR #1–#7 were merged)
-**PR:** _(filled in after the PR is opened)_
+**PR:** https://github.com/leedoming/rewearlab-ai-project/pull/8
 **Repository:** fork `leedoming/rewearlab-ai-project` (upstream: `GeeYun086/rewearlab-ai-project`)
 
 ---
@@ -203,4 +203,4 @@ ddc2d0f  test: cover failure taxonomy and failure_cases.jsonl/failure_distributi
 
 ## 9. PR
 
-_(filled in after the PR is opened)_
+https://github.com/leedoming/rewearlab-ai-project/pull/8
