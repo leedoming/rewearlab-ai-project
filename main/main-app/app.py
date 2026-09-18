@@ -8,18 +8,28 @@ import pandas as pd
 from PIL import Image
 import io
 import os
-import torch
+import sys
 import numpy as np
-try:
-    from transformers import AutoImageProcessor, AutoModelForObjectDetection
-except ImportError:
-    # 구버전 transformers
-    from transformers import AutoFeatureExtractor as AutoImageProcessor
-    from transformers import AutoModelForObjectDetection
 import chromadb
 import logging
 from openai import AzureOpenAI
 import base64
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from retrieval import search as retrieval_search
+from retrieval.config import (
+    COLLECTION_NAMES,
+    DETECTION_MODEL,
+    DETECTION_THRESHOLD,
+    EMBEDDING_MODEL,
+    MIN_BBOX_AREA,
+)
+from retrieval.detection import detect_fashion_items as core_detect_fashion_items
+from retrieval.embedding import embed_image
+from retrieval.models import load_detection_model as core_load_detection_model
+from retrieval.models import load_embedding_model as core_load_embedding_model
+from retrieval.preprocessing import preprocess_image
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -60,22 +70,16 @@ if 'similar_items' not in st.session_state:
 def get_chromadb_client():
     """ChromaDB 클라이언트 가져오기 (환경에 따라 자동 전환)"""
     if CHROMADB_HOST:
-        # Azure 배포: 원격 ChromaDB 서버
         logger.info(f"ChromaDB 원격 서버 연결: {CHROMADB_HOST}:{CHROMADB_PORT}")
-        return chromadb.HttpClient(host=CHROMADB_HOST, port=CHROMADB_PORT)
     else:
-        # 로컬 개발: 파일 기반
         logger.info("ChromaDB 로컬 파일 사용: ./musinsa_fashion_db_crop")
-        return chromadb.PersistentClient(path="./musinsa_fashion_db_crop")
+    return retrieval_search.get_chromadb_client(host=CHROMADB_HOST, port=CHROMADB_PORT)
 
 @st.cache_resource
 def load_detection_model():
     """객체 탐지 모델 로드"""
     try:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        ckpt = 'yainage90/fashion-object-detection'
-        image_processor = AutoImageProcessor.from_pretrained(ckpt)
-        model = AutoModelForObjectDetection.from_pretrained(ckpt).to(device)
+        image_processor, model, device = core_load_detection_model(DETECTION_MODEL)
         logger.info(f"객체 탐지 모델이 {device}에 로드되었습니다.")
         return image_processor, model, device
     except Exception as e:
@@ -126,54 +130,25 @@ def detect_defects_azure(image_bytes):
             "status": "판매 가능 (오류 발생)"
         }
 
-def crop_image(image, box):
-    """바운딩 박스에 맞게 이미지 크롭"""
-    width, height = image.size
-    x1, y1, x2, y2 = [int(coord) for coord in box]
-    x1, y1 = max(0, x1), max(0, y1)
-    x2, y2 = min(width, x2), min(height, y2)
-    return image.crop((x1, y1, x2, y2))
-
-def detect_fashion_items(image, threshold=0.4):
+def detect_fashion_items(image, threshold=DETECTION_THRESHOLD):
     """패션 아이템 탐지"""
     image_processor, detection_model, device = load_detection_model()
-    
+
     if image_processor is None:
         return []
-    
+
     try:
-        with torch.no_grad():
-            inputs = image_processor(images=[image], return_tensors="pt")
-            outputs = detection_model(**inputs.to(device))
-            target_sizes = torch.tensor([[image.size[1], image.size[0]]])
-            results = image_processor.post_process_object_detection(
-                outputs, 
-                threshold=threshold, 
-                target_sizes=target_sizes
-            )[0]
-            
-            detected_items = []
-            
-            for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
-                label_name = detection_model.config.id2label[label.item()].lower()
-                score_value = score.item()
-                
-                x1, y1, x2, y2 = [int(coord) for coord in box]
-                area = (x2 - x1) * (y2 - y1)
-                
-                if area < 100:
-                    continue
-                
-                detected_items.append({
-                    'bbox': [x1, y1, x2, y2],
-                    'label': label_name,
-                    'score': score_value,
-                    'area': area
-                })
-            
-            detected_items.sort(key=lambda x: x['area'], reverse=True)
-            return detected_items
-            
+        detected_items = core_detect_fashion_items(
+            image,
+            image_processor=image_processor,
+            model=detection_model,
+            device=device,
+            threshold=threshold,
+            min_area=MIN_BBOX_AREA,
+        )
+        detected_items.sort(key=lambda x: x['area'], reverse=True)
+        return detected_items
+
     except Exception as e:
         logger.error(f"패션 아이템 탐지 중 오류: {e}")
         return []
@@ -183,53 +158,30 @@ def search_similar_items(image, top_k=5):
     try:
         # 환경에 따라 자동 전환
         client = get_chromadb_client()
-        
-        # CLIP 모델로 직접 임베딩 생성
-        import open_clip
-        clip_model, preprocess_val, _ = open_clip.create_model_and_transforms('hf-hub:Marqo/marqo-fashionSigLIP')
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        clip_model = clip_model.to(device)
-        
-        # 이미지 임베딩 생성
-        img_tensor = preprocess_val(image).unsqueeze(0).to(device)
-        with torch.no_grad():
-            features = clip_model.encode_image(img_tensor)
-            features = features / features.norm(dim=-1, keepdim=True)
-        query_embedding = features.cpu().numpy()[0].tolist()
-        
-        # 모든 컬렉션에서 검색
-        collection_names = ['pants', 'top', 'outer', 'dress_skirts']
-        all_results = []
-        
-        for collection_name in collection_names:
-            try:
-                # embedding_function 없이 컬렉션 가져오기
-                collection = client.get_collection(name=collection_name)
-                
-                # 임베딩으로 직접 검색
-                results = collection.query(
-                    query_embeddings=[query_embedding],
-                    n_results=top_k,
-                    include=['metadatas', 'distances']
-                )
-                
-                if results and 'metadatas' in results and results['metadatas']:
-                    for metadata, distance in zip(results['metadatas'][0], results['distances'][0]):
-                        similarity_score = 1 / (1 + distance)
-                        
-                        item_data = metadata.copy()
-                        item_data['similarity_score'] = similarity_score
-                        item_data['distance'] = float(distance)
-                        item_data['collection'] = collection_name
-                        all_results.append(item_data)
-            except Exception as e:
-                logger.error(f"컬렉션 '{collection_name}' 검색 중 오류: {e}")
-                continue
-        
-        # 결과 정렬
-        all_results.sort(key=lambda x: x['similarity_score'], reverse=True)
-        return all_results[:top_k]
-        
+
+        # CLIP 모델로 직접 임베딩 생성 (기존 동작 유지: 매 호출마다 새로 로드)
+        clip_model, preprocess_val, clip_device = core_load_embedding_model(EMBEDDING_MODEL)
+        query_embedding = embed_image(image, clip_model, preprocess_val, clip_device)
+
+        # 모든 컬렉션에서 검색 (기존 동작 유지: id 기준 중복 제거 없음)
+        results = retrieval_search.search_collections(
+            client,
+            COLLECTION_NAMES,
+            query_embedding=query_embedding,
+            top_k=top_k,
+            dedupe=False,
+        )
+
+        similar_items = []
+        for result in results:
+            item_data = dict(result['metadata'])
+            item_data['similarity_score'] = 1 / (1 + result['raw_distance'])
+            item_data['distance'] = result['raw_distance']
+            item_data['collection'] = result['collection']
+            similar_items.append(item_data)
+
+        return similar_items
+
     except Exception as e:
         logger.error(f"유사 상품 검색 중 오류: {e}")
         return []
@@ -526,18 +478,11 @@ if uploaded_file is not None:
         # Step 3: 객체 탐지
         with st.spinner("의류 영역 감지 중..."):
             detected_items = detect_fashion_items(image)
-        
-        if not detected_items:
-            detected_items = [{
-                'bbox': [0, 0, image.size[0], image.size[1]],
-                'label': 'original',
-                'score': 0.0,
-                'area': image.size[0] * image.size[1]
-            }]
-        
-        # 가장 큰 영역 자동 선택
-        selected_item = detected_items[0]
-        cropped_image = crop_image(image, selected_item['bbox'])
+
+        # 가장 큰 영역 자동 선택 (bbox 미탐지 시 원본 이미지로 fallback)
+        cropped_image, _preprocessing_metadata = preprocess_image(
+            image, detected_items, policy="largest", fallback_policy="raw"
+        )
         
         # Step 4: 유사 상품 검색
         st.header(f"3. 트렌드 유사 상품 (Top-{top_k})")
