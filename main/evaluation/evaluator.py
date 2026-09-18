@@ -26,6 +26,16 @@ METRIC_FIELDS = (
     "relevant_exclusion_rate",
 )
 
+# IMPLEMENTATION_SPEC.md section 33's ablation matrix: E1-E4 vary only the
+# bbox selection policy, holding everything else (dataset, detection model,
+# threshold, category filter=none, padding=0%, top_k, dedupe) fixed.
+EXPERIMENT_BBOX_POLICIES = {
+    "E1": "highest_confidence",
+    "E2": "largest",
+    "E3": "category_confidence",
+    "E4": "category_largest",
+}
+
 
 def evaluate_query(query, results):
     relevances = [query.labels.get(str(result.get("product_id")), 0) for result in results]
@@ -47,48 +57,29 @@ def evaluate_query(query, results):
     }
 
 
-def run_baseline(dataset, retrieve, output_dir, config):
-    """Run E0 over one dataset split using an injected retrieval callable."""
-    if config.get("experiment_id") != "E0":
-        raise ValueError("RAW baseline runner only accepts experiment_id='E0'")
-    if config.get("preprocessing", {}).get("mode") != "raw":
-        raise ValueError("E0 preprocessing.mode must be 'raw'")
+def _validate_common_retrieval_controls(config, top_k_floor=10):
+    """Shared controls that must stay fixed across every ablation experiment
+    (IMPLEMENTATION_SPEC.md section 34: only one major variable changes per
+    experiment)."""
     retrieval_config = config.get("retrieval", {})
     top_k = retrieval_config.get("top_k")
-    if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < 10:
-        raise ValueError("E0 retrieval.top_k must be an integer of at least 10")
+    if isinstance(top_k, bool) or not isinstance(top_k, int) or top_k < top_k_floor:
+        raise ValueError(f"retrieval.top_k must be an integer of at least {top_k_floor}")
     if retrieval_config.get("dedupe") is not True:
-        raise ValueError("E0 retrieval.dedupe must be true")
+        raise ValueError("retrieval.dedupe must be true")
+
+
+def _select_split(dataset, config):
     split = config.get("split", "dev")
     if split not in {"dev", "holdout", "all"}:
         raise ValueError("split must be dev, holdout, or all")
     queries = [query for query in dataset.queries if split == "all" or query.split == split]
     if not queries:
         raise ValueError(f"dataset contains no queries for split {split!r}")
+    return queries
 
-    records = []
-    for query in queries:
-        results = retrieve(query)
-        metrics = evaluate_query(query, results)
-        records.append(
-            {
-                "query_id": query.query_id,
-                "category": query.category,
-                "difficulty": query.difficulty,
-                "scene_type": query.scene_type,
-                "experiment_id": "E0",
-                "config": config,
-                "preprocessing": {
-                    "mode": "raw",
-                    "selected_bbox": None,
-                    "fallback_used": False,
-                    "fallback_reason": None,
-                },
-                "results": results,
-                "metrics": metrics,
-            }
-        )
 
+def _write_experiment_outputs(records, output_dir, dataset, config, experiment_id):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     with (output_dir / "query_results.jsonl").open("w", encoding="utf-8") as file:
@@ -113,7 +104,7 @@ def run_baseline(dataset, retrieve, output_dir, config):
             )
 
     summary = {
-        "experiment_id": "E0",
+        "experiment_id": experiment_id,
         "dataset_version": dataset.version,
         "config": config,
         **aggregate_metrics(records),
@@ -121,4 +112,107 @@ def run_baseline(dataset, retrieve, output_dir, config):
     (output_dir / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
+    return summary
+
+
+def run_baseline(dataset, retrieve, output_dir, config):
+    """Run E0 over one dataset split using an injected retrieval callable."""
+    if config.get("experiment_id") != "E0":
+        raise ValueError("RAW baseline runner only accepts experiment_id='E0'")
+    if config.get("preprocessing", {}).get("mode") != "raw":
+        raise ValueError("E0 preprocessing.mode must be 'raw'")
+    _validate_common_retrieval_controls(config)
+    queries = _select_split(dataset, config)
+
+    records = []
+    for query in queries:
+        results = retrieve(query)
+        metrics = evaluate_query(query, results)
+        records.append(
+            {
+                "query_id": query.query_id,
+                "category": query.category,
+                "difficulty": query.difficulty,
+                "scene_type": query.scene_type,
+                "experiment_id": "E0",
+                "config": config,
+                "preprocessing": {
+                    "mode": "raw",
+                    "selected_bbox": None,
+                    "fallback_used": False,
+                    "fallback_reason": None,
+                },
+                "results": results,
+                "metrics": metrics,
+            }
+        )
+
+    summary = _write_experiment_outputs(records, output_dir, dataset, config, "E0")
+    return records, summary
+
+
+def run_bbox_experiment(dataset, pipeline, output_dir, config):
+    """Run one of E1-E4 (bbox policy ablation) over one dataset split.
+
+    `pipeline(query)` must return `(results, preprocessing_metadata)`, where
+    `preprocessing_metadata` is exactly what
+    `retrieval.preprocessing.preprocess_image` returned for that query, so
+    `fallback_used`/`fallback_reason` are recorded, never fabricated.
+
+    This function validates that the config only changes the bbox policy
+    relative to E0 (IMPLEMENTATION_SPEC.md section 34: one variable at a
+    time) -- it does NOT itself guarantee every policy saw the same
+    detection output (spec section 19's other MUST). That guarantee comes
+    from the caller building `pipeline` on top of a shared
+    `evaluation.detection_cache.DetectionCache` (see
+    `evaluation/run_bbox_experiments.py`), which this function has no way
+    to verify from the outside.
+    """
+    experiment_id = config.get("experiment_id")
+    expected_policy = EXPERIMENT_BBOX_POLICIES.get(experiment_id)
+    if expected_policy is None:
+        raise ValueError(
+            f"bbox experiment runner only accepts experiment_id in {sorted(EXPERIMENT_BBOX_POLICIES)}"
+        )
+    if config.get("preprocessing", {}).get("mode") != "bbox":
+        raise ValueError(f"{experiment_id} preprocessing.mode must be 'bbox'")
+    bbox_policy = config.get("preprocessing", {}).get("bbox_policy")
+    if bbox_policy != expected_policy:
+        raise ValueError(
+            f"{experiment_id} preprocessing.bbox_policy must be {expected_policy!r}, got {bbox_policy!r}"
+        )
+    padding_ratio = config.get("preprocessing", {}).get("padding_ratio", 0.0)
+    if padding_ratio != 0.0:
+        raise ValueError(
+            f"{experiment_id} preprocessing.padding_ratio must be 0.0 "
+            "(padding sensitivity is Milestone 9 scope)"
+        )
+    category_filter_policy = config.get("category_filter", {}).get("policy", "none")
+    if category_filter_policy != "none":
+        raise ValueError(
+            f"{experiment_id} category_filter.policy must be 'none' "
+            "(category filtering is Milestone 6 scope)"
+        )
+    _validate_common_retrieval_controls(config)
+    queries = _select_split(dataset, config)
+
+    records = []
+    for query in queries:
+        results, preprocessing_metadata = pipeline(query)
+        metrics = evaluate_query(query, results)
+        records.append(
+            {
+                "query_id": query.query_id,
+                "category": query.category,
+                "difficulty": query.difficulty,
+                "scene_type": query.scene_type,
+                "experiment_id": experiment_id,
+                "config": config,
+                "preprocessing": preprocessing_metadata,
+                "results": results,
+                "metrics": metrics,
+            }
+        )
+
+    summary = _write_experiment_outputs(records, output_dir, dataset, config, experiment_id)
     return records, summary

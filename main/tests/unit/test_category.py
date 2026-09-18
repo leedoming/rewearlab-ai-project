@@ -23,6 +23,19 @@ def test_get_allowed_labels():
     assert get_allowed_labels("모자") == []
 
 
+def test_get_allowed_labels_accepts_collection_names_too():
+    # The evaluation dataset (main/evaluation/dataset) labels queries with a
+    # ChromaDB collection name (e.g. "outer"), not the Musinsa category
+    # string ("아우터") -- category-based bbox selection must resolve both,
+    # or category_confidence/category_largest would silently see zero
+    # compatible labels for every dataset query and always fall back.
+    assert get_allowed_labels("pants") == ["bottom"]
+    assert get_allowed_labels("top") == ["top", "outer"]
+    assert get_allowed_labels("outer") == ["top", "outer"]
+    assert get_allowed_labels("dress_skirts") == ["bottom", "dress"]
+    assert get_allowed_labels("not_a_real_collection") == []
+
+
 def test_is_label_allowed_for_category():
     assert is_label_allowed_for_category("outer", "상의") is True
     assert is_label_allowed_for_category("bottom", "상의") is False

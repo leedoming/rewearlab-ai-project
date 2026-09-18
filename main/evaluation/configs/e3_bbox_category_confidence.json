@@ -1,0 +1,7 @@
+{
+  "experiment_id": "E3",
+  "split": "dev",
+  "preprocessing": {"mode": "bbox", "bbox_policy": "category_confidence", "padding_ratio": 0.0},
+  "category_filter": {"policy": "none"},
+  "retrieval": {"top_k": 10, "dedupe": true}
+}

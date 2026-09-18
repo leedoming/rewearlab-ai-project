@@ -46,6 +46,18 @@ CATEGORY_LABEL_MAPPING = {
     "원피스_스커트": ["bottom", "dress"],
 }
 
+# The same compatibility rule, keyed by ChromaDB collection name instead of
+# the Musinsa category string. The evaluation dataset (main/evaluation/dataset)
+# labels each query with a collection name (loader.py's CATEGORIES =
+# frozenset(COLLECTION_NAMES)), so category-based bbox selection
+# (category_confidence/category_largest) needs this namespace too. Derived
+# from CATEGORY_LABEL_MAPPING/CATEGORY_COLLECTION_MAPPING rather than
+# hardcoded again, so the two can never silently drift apart.
+COLLECTION_LABEL_MAPPING = {
+    CATEGORY_COLLECTION_MAPPING[category]: labels
+    for category, labels in CATEGORY_LABEL_MAPPING.items()
+}
+
 # --- BBox selection / fallback policies --------------------------------
 
 BBOX_SELECTION_POLICIES = (
