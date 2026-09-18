@@ -1,7 +1,7 @@
 # Milestone 10 — Final Decision & Regression: Evidence Record
 
 **Branch:** `feat/m10-final-decision-regression` (created from `main` after PR #1–#9 were merged)
-**PR:** _(filled in after the PR is opened)_
+**PR:** https://github.com/leedoming/rewearlab-ai-project/pull/10
 **Repository:** fork `leedoming/rewearlab-ai-project` (upstream: `GeeYun086/rewearlab-ai-project`)
 
 ---
@@ -218,4 +218,4 @@ c063e5d  chore: remove accidentally committed __pycache__ files
 
 ## 9. PR
 
-_(filled in after the PR is opened)_
+https://github.com/leedoming/rewearlab-ai-project/pull/10
