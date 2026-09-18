@@ -55,6 +55,18 @@ def test_precision_rejects_non_positive_k():
         precision_at_k([1, 0], k=0)
 
 
+@pytest.mark.parametrize("metric,args", [
+    (precision_at_k, ([1, 0], 2.5)),
+    (recall_at_k, ([1, 0], 2.5, 1)),
+    (dcg_at_k, ([1, 0], 2.5)),
+    (ndcg_at_k, ([1, 0], 2.5)),
+    (incompatible_category_rate_at_k, ([False], 2.5)),
+])
+def test_at_k_metrics_reject_non_integer_k(metric, args):
+    with pytest.raises(ValueError, match="positive integer"):
+        metric(*args)
+
+
 # --- recall_at_k --------------------------------------------------------
 
 def test_recall_relevant_at_rank_1():
@@ -85,6 +97,11 @@ def test_recall_no_relevant_item_returns_none():
 
 def test_recall_k_larger_than_result_count():
     assert recall_at_k([1], k=10, total_relevant=1) == pytest.approx(1.0)
+
+
+def test_recall_rejects_negative_total_relevant():
+    with pytest.raises(ValueError, match="total_relevant"):
+        recall_at_k([1], k=1, total_relevant=-1)
 
 
 # --- mrr -------------------------------------------------------------
@@ -156,6 +173,16 @@ def test_ndcg_accepts_explicit_ideal_relevances_from_full_ground_truth():
     assert result < 1.0
 
 
+def test_ndcg_rejects_ideal_that_cannot_dominate_retrieved_ranking():
+    with pytest.raises(ValueError, match="ideal_relevances"):
+        ndcg_at_k([2, 2, 0], k=3, ideal_relevances=[1])
+
+
+def test_ndcg_rejects_non_numeric_explicit_ideal_grade():
+    with pytest.raises(ValueError, match="ideal_relevances"):
+        ndcg_at_k([1, 0], k=2, ideal_relevances=[2, None])
+
+
 def test_dcg_and_ndcg_reject_non_positive_k():
     with pytest.raises(ValueError):
         dcg_at_k([1, 0], k=0)
@@ -198,3 +225,13 @@ def test_relevant_exclusion_rate_no_relevant_items_returns_none():
 def test_relevant_exclusion_rate_rejects_impossible_counts():
     with pytest.raises(ValueError):
         relevant_exclusion_rate(total_relevant=2, excluded_relevant_count=3)
+
+
+def test_relevant_exclusion_rate_rejects_impossible_count_when_total_is_zero():
+    with pytest.raises(ValueError, match="cannot exceed"):
+        relevant_exclusion_rate(total_relevant=0, excluded_relevant_count=3)
+
+
+def test_relevant_exclusion_rate_rejects_negative_excluded_count():
+    with pytest.raises(ValueError, match="excluded_relevant_count"):
+        relevant_exclusion_rate(total_relevant=3, excluded_relevant_count=-1)

@@ -25,6 +25,28 @@ Metric edge cases (IMPLEMENTATION_SPEC.md section 25):
 """
 
 import math
+from numbers import Integral, Real
+
+
+def _require_positive_k(k):
+    if isinstance(k, bool) or not isinstance(k, Integral) or k <= 0:
+        raise ValueError("k must be a positive integer")
+
+
+def _require_non_negative(value, name):
+    if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(value) or value < 0:
+        raise ValueError(f"{name} must be a non-negative number")
+
+
+def _validate_relevance_grades(relevances, name):
+    for relevance in relevances:
+        if (
+            isinstance(relevance, bool)
+            or not isinstance(relevance, Real)
+            or not math.isfinite(relevance)
+            or relevance < 0
+        ):
+            raise ValueError(f"{name} must contain non-negative numeric relevance grades")
 
 
 def _is_relevant(relevance):
@@ -41,8 +63,7 @@ def precision_at_k(relevances, k):
     Precision denominator stays K) -- missing slots simply contribute no
     relevant hits, they do not shrink the denominator.
     """
-    if k <= 0:
-        raise ValueError("k must be positive")
+    _require_positive_k(k)
     top_k = relevances[:k]
     relevant_count = sum(1 for r in top_k if _is_relevant(r))
     return relevant_count / k
@@ -58,8 +79,8 @@ def recall_at_k(relevances, k, total_relevant):
     excluded from aggregation by the caller) since recall is undefined
     when there is nothing to find.
     """
-    if k <= 0:
-        raise ValueError("k must be positive")
+    _require_positive_k(k)
+    _require_non_negative(total_relevant, "total_relevant")
     if total_relevant == 0:
         return None
     top_k = relevances[:k]
@@ -83,8 +104,7 @@ def mrr(relevances):
 
 def dcg_at_k(relevances, k):
     """Discounted Cumulative Gain@K using graded relevance (0/1/2) as-is."""
-    if k <= 0:
-        raise ValueError("k must be positive")
+    _require_positive_k(k)
     top_k = relevances[:k]
     return sum(rel / math.log2(rank + 1) for rank, rel in enumerate(top_k, start=1))
 
@@ -108,13 +128,17 @@ def ndcg_at_k(relevances, k, ideal_relevances=None):
     exists at all for this query: there is nothing to rank, so there is
     no ranking error to report either.
     """
-    if k <= 0:
-        raise ValueError("k must be positive")
+    _require_positive_k(k)
+    if ideal_relevances is not None:
+        _validate_relevance_grades(ideal_relevances, "ideal_relevances")
     ideal = sorted(ideal_relevances, reverse=True) if ideal_relevances is not None else sorted(relevances, reverse=True)
     ideal_dcg = dcg_at_k(ideal, k)
+    actual_dcg = dcg_at_k(relevances, k)
+    if ideal_relevances is not None and actual_dcg > ideal_dcg and not math.isclose(actual_dcg, ideal_dcg):
+        raise ValueError("ideal_relevances must produce a DCG at least as large as relevances")
     if ideal_dcg == 0:
         return 0.0
-    return dcg_at_k(relevances, k) / ideal_dcg
+    return actual_dcg / ideal_dcg
 
 
 def incompatible_category_rate_at_k(is_incompatible_flags, k):
@@ -127,8 +151,7 @@ def incompatible_category_rate_at_k(is_incompatible_flags, k):
     domain knowledge of what "compatible" means. The denominator is fixed
     at `k`, consistent with `precision_at_k`'s "fewer than K" handling.
     """
-    if k <= 0:
-        raise ValueError("k must be positive")
+    _require_positive_k(k)
     top_k = is_incompatible_flags[:k]
     incompatible_count = sum(1 for flag in top_k if flag)
     return incompatible_count / k
@@ -146,8 +169,10 @@ def relevant_exclusion_rate(total_relevant, excluded_relevant_count):
     Returns None when `total_relevant` is 0, matching `recall_at_k`'s
     "nothing to reason about" convention for that same case.
     """
-    if total_relevant == 0:
-        return None
+    _require_non_negative(total_relevant, "total_relevant")
+    _require_non_negative(excluded_relevant_count, "excluded_relevant_count")
     if excluded_relevant_count > total_relevant:
         raise ValueError("excluded_relevant_count cannot exceed total_relevant")
+    if total_relevant == 0:
+        return None
     return excluded_relevant_count / total_relevant

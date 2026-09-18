@@ -3,7 +3,7 @@
 **Branch:** `feat/m2-metric-foundation` (created from `main` at `ff39fce`, per the
 per-milestone rule "start from updated main" — independent of the still-unmerged
 Milestone 1 branch)
-**PR:** _(filled in after the PR is opened — see section 8)_
+**PR:** https://github.com/leedoming/rewearlab-ai-project/pull/2
 **Repository:** fork `leedoming/rewearlab-ai-project` (upstream: `GeeYun086/rewearlab-ai-project`)
 
 ---
@@ -28,13 +28,13 @@ that reporting decision belongs to the evaluator (Milestone 4+).
 
 ### 2.1 No dependency on torch / chromadb / streamlit
 
-**Decision:** `main/evaluation/metrics.py` imports only the standard-library `math` module.
+**Decision:** `main/evaluation/metrics.py` imports only standard-library modules (`math` and
+`numbers`).
 
 **Reason:** `IMPLEMENTATION_SPEC.md` section 26 explicitly requires this ("Pure evaluation
-logic이어야 한다"). Verified directly: `grep -n "^import\|^from" main/evaluation/metrics.py`
-shows only `import math`.
+logic이어야 한다").
 
-**Evidence:** all 34 unit tests for this module pass in this development environment, which
+**Evidence:** all 44 unit tests for this module pass in this development environment, which
 does **not** have `torch`, `chromadb`, `transformers`, or `open_clip` installed (same
 environment/verification as Milestone 1 — see `main/docs/evidence/milestone-1.md` section 6).
 
@@ -105,15 +105,29 @@ and auditable rather than an undocumented implementation detail.
 
 ## 3. Review Findings
 
-No code review has been run against this milestone's diff yet as of this record. This section
-will be updated (or a follow-up fix commit + evidence update added) if/when one is performed,
-per the same process used for Milestone 1 (see `main/docs/evidence/milestone-1.md` section 3).
+### Review round 1
+
+The review reported ten findings. Six correctness/validation findings were confirmed and
+fixed: inconsistent explicit NDCG ideals could produce values above 1; an impossible
+exclusion count was hidden by the zero-total early return; negative `total_relevant` and
+`excluded_relevant_count` values were accepted; invalid explicit ideal grades produced an
+unclear sorting error; and non-integer `k` values passed the initial guards.
+
+Four lower-priority findings were deferred: signaling/renaming the documented self-sorted
+NDCG fallback, further deduplication of the common top-K match-count pattern, and an
+aggregation helper for excluding undefined recall values. The shared positive-integer `k`
+helper was implemented while fixing the required validation issue because it removed the
+five inconsistent guards without expanding milestone scope.
 
 ---
 
 ## 4. Fixes Made
 
-None — this is a from-scratch implementation, not a fix to existing code.
+- Added shared validation for positive integer `k` values across all five `@K` metrics.
+- Rejected negative or non-numeric relevant/excluded counts and checked impossible exclusion
+  combinations before returning `None` for the zero-total case.
+- Validated explicit ideal relevance grades and rejected an explicit ideal whose DCG cannot
+  dominate the observed ranking, preventing NDCG values above 1 from inconsistent inputs.
 
 ---
 
@@ -136,8 +150,8 @@ Run from the repository root (`2025-AI-REWEARLab/`) unless noted.
 ```bash
 grep -n "^import\|^from" main/evaluation/metrics.py
 ```
-Result: `27:import math` — the only import in the file, confirming no
-torch/chromadb/streamlit dependency.
+Result: only `math` and `numbers` standard-library imports; no torch/chromadb/streamlit
+dependency.
 
 ```bash
 python -m compileall -q main/evaluation main/tests
@@ -147,7 +161,8 @@ Result: exit 0, no output (no syntax/import errors).
 ```bash
 cd main && python -m pytest tests/unit -v
 ```
-Result: `34 passed in 0.07s`. All 34 tests listed by name in the commit history / CI log;
+Result after review-round fixes: `44 passed in 0.09s`. All 44 tests listed by name in the
+local test output;
 none skipped, none xfailed.
 
 Test environment: Python 3.13.1, pytest 9.1.1, on Windows. As with Milestone 1, `torch`,
@@ -190,4 +205,4 @@ fakes/stubs specifically because of this).
 
 ## 9. PR
 
-_(To be filled in immediately after the PR is opened.)_
+https://github.com/leedoming/rewearlab-ai-project/pull/2
