@@ -165,6 +165,11 @@ Result after review-round fixes: `44 passed in 0.09s`. All 44 tests listed by na
 local test output;
 none skipped, none xfailed.
 
+After PR #1 was merged, `origin/main` was merged into this branch. The add/add conflict in
+`main/tests/conftest.py` contained identical path setup code with milestone-specific comments;
+it was resolved to document that both `evaluation` and `retrieval` now live under `main/`.
+The combined Milestone 1 + Milestone 2 unit suite then passed: `89 passed in 0.87s`.
+
 Test environment: Python 3.13.1, pytest 9.1.1, on Windows. As with Milestone 1, `torch`,
 `chromadb`, `transformers`, and `open_clip` are **not installed** in this environment — this
 milestone's module has no dependency on any of them, so that is not a limitation for this
@@ -200,8 +205,9 @@ fakes/stubs specifically because of this).
 ```
 8d84688  feat: add retrieval evaluation metrics (Milestone 2)
 2934a83  test: cover metrics edge cases
+785d077  docs: add milestone 2 evidence record
+e5087a9  fix: validate metric edge cases
 ```
-(This evidence document is added in a third, following commit — see the PR for its exact SHA.)
 
 ## 9. PR
 
