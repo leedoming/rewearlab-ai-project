@@ -7,14 +7,22 @@ any mapping values.
 import logging
 import os
 
-from .config import CATEGORY_COLLECTION_MAPPING, CATEGORY_LABEL_MAPPING
+from .config import CATEGORY_COLLECTION_MAPPING, CATEGORY_LABEL_MAPPING, COLLECTION_LABEL_MAPPING
 
 logger = logging.getLogger(__name__)
 
 
 def get_allowed_labels(category):
-    """Detection labels considered compatible with `category` (possibly empty)."""
-    return CATEGORY_LABEL_MAPPING.get(category, [])
+    """Detection labels considered compatible with `category` (possibly empty).
+
+    Accepts either a Musinsa category string (e.g. "상의") or a ChromaDB
+    collection name (e.g. "top", as used by the evaluation dataset's
+    `category` field) — the two namespaces describe the same compatibility
+    rule, just keyed differently.
+    """
+    if category in CATEGORY_LABEL_MAPPING:
+        return CATEGORY_LABEL_MAPPING[category]
+    return COLLECTION_LABEL_MAPPING.get(category, [])
 
 
 def get_collection_name(category):
