@@ -2,7 +2,10 @@
 
 ## Status
 
-**Decision: TBD** — pending real ablation results. See "Decision" below.
+**Provisional: `category_confidence` (E3).** Based on a real but small (N=7 query) pilot —
+see "Pilot Evidence" below and ADR-001's own Pilot Evidence section (same run). Not final: needs
+confirmation against the full golden set (section 55) before `docs/decisions/final_config.yaml`
+is filled in for real.
 
 ## Context
 
@@ -34,17 +37,46 @@ section 18):
   the fix (`docs/evidence/milestone-5.md`, section on `COLLECTION_LABEL_MAPPING`). This is now
   covered by a regression test (`main/tests/regression/test_golden_set.py::
   test_category_mapping_resolves_known_collection_names`).
-- No NDCG/MRR/failure-distribution comparison across the four policies exists yet — same root
-  cause as ADR-001 (empty dataset, no ML dependencies installed here).
+- Until now, no NDCG/MRR/failure-distribution comparison across the four policies existed — see
+  "Pilot Evidence" below for what's changed.
+
+## Pilot Evidence (real data, N=7 queries)
+
+Same real pilot run as ADR-001 (`main/evaluation/pilot/`, see that ADR for the full setup and
+docs/evidence/milestone-10-pilot.md for the complete writeup):
+
+| Policy | NDCG@10 | MRR | Recall@10 | Incompatible Category Rate@10 | Failures (of 7) |
+|---|--:|--:|--:|--:|--:|
+| highest_confidence (E1) | 0.603 | 0.714 | 0.655 | 0.314 | 2 embedding_similarity |
+| largest (E2) | 0.601 | 0.714 | 0.667 | 0.314 | 2 embedding_similarity |
+| category_confidence (E3) | **0.738** | 0.857 | 0.810 | 0.271 | 1 embedding_similarity |
+| category_largest (E4) | 0.714 | 0.857 | 0.810 | 0.257 | 1 embedding_similarity |
+
+The two category-aware policies (E3/E4) both beat both category-agnostic policies (E1/E2) on
+every metric in this pilot, and `category_confidence` (E3) edges out `category_largest` (E4) on
+NDCG/recall. The mechanism is directly inspectable in the pooled candidates
+(docs/evidence/milestone-10-pilot.md): for the two multi-item/person-wearing queries in this
+pilot (Q003, a knit-sweater-plus-visible-jeans photo; Q006, two people each wearing a cardigan),
+`highest_confidence`/`largest` selected a detection from the *wrong* collection entirely (e.g.
+cropping to jeans for a knit-sweater query) in nearly every pooled result, while
+`category_confidence`/`category_largest` — constrained to category-compatible detections via
+`retrieval.category.get_allowed_labels` — did not make that mistake. This is precisely the
+`wrong_object_rate` failure mode `evaluation.sensitivity` (Milestone 9) was built to measure,
+now observed on real photos rather than only defined in the abstract.
 
 ## Decision
 
-**TBD.** No policy is finalized without the E1-E4 comparison Milestone 5 built the infrastructure
-for. `docs/decisions/final_config.yaml`'s `bbox_policy` field stays `TBD`.
+**Provisional: `category_confidence` (E3).** It has the best NDCG@10, ties for best MRR, ties
+for best recall, and has the lowest failure count in this pilot. `category_largest` (E4) is a
+close second and would be a reasonable runner-up candidate in ADR-005's final shortlist.
+
+This is provisional, not final, for the same reasons as ADR-001: N=7 is below section 55's
+10-15 query target, only 3 of 4 collections are represented, and relevance labels come from a
+single AI-assisted rater rather than a validated human process.
 
 ## Reason
 
-N/A until Decision is made.
+See "Pilot Evidence" above; full per-query detail in docs/evidence/milestone-10-pilot.md.
 
 ## Trade-offs
 
@@ -58,11 +90,17 @@ N/A until Decision is made.
 
 ## Rejected Alternatives
 
-None rejected yet — all four remain candidates pending the ablation comparison.
+**highest_confidence (E1) and largest (E2)**, provisionally — both underperformed the
+category-aware policies on every metric in the pilot, for the specific, inspectable reason above
+(wrong-collection detections chosen in multi-item scenes). Not rejected with full confidence
+given N=7, but there is no pilot evidence favoring either of them over E3/E4.
 
 ## Future Work
 
-Run E1-E4 for real; compare NDCG@10/MRR and each policy's failure distribution (Milestone 8),
-paying particular attention to `bbox_selection_failure`/`detection_failure` rates (a policy that
-wins on average NDCG but has a much higher failure rate on hard/multi-item queries is a
-meaningfully different trade-off than one that's simply better everywhere).
+Grow the golden set (section 55's 10-15 queries, all four collections) and get a second rater,
+then re-run E1-E4 to confirm `category_confidence` still wins before finalizing
+`docs/decisions/final_config.yaml`'s `bbox_policy` field. Pay particular attention to whether a
+larger, more diverse sample keeps `bbox_selection_failure`/`detection_failure` rates low for the
+category-aware policies specifically (this pilot never observed either fallback failure mode at
+all — worth checking that's not an artifact of the pilot's uniformly clean product photos rather
+than genuine robustness).
