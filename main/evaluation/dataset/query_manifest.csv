@@ -1,1 +1,8 @@
 query_id,image_path,category,difficulty,scene_type,split,num_visible_items,background_complexity,important_features
+Q001,queries/Q001.jpg,pants,hard,person_wearing,dev,2,low,
+Q002,queries/Q002.jpg,pants,easy,clean_product,dev,1,low,
+Q003,queries/Q003.jpg,top,hard,person_wearing,dev,2,medium,
+Q004,queries/Q004.jpg,top,easy,clean_product,dev,1,low,
+Q005,queries/Q005.jpg,top,medium,clean_product,dev,1,low,
+Q006,queries/Q006.jpg,outer,hard,multi_item,dev,2,high,
+Q007,queries/Q007.jpg,outer,medium,clean_product,dev,1,low,

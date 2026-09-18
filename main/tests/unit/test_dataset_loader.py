@@ -71,14 +71,21 @@ def test_load_dataset_combines_manifest_and_labels(tmp_path):
         query.labels["P10"] = 0
 
 
-def test_empty_repository_template_is_valid_before_images_exist():
+def test_real_repository_dataset_loads_with_images_present():
+    # As of the Milestone 10 real-data pilot (docs/evidence/milestone-10-pilot.md),
+    # evaluation/dataset is no longer the empty scaffold -- it holds 7 real,
+    # pooled-labeled queries. This regression-tests that the committed
+    # query_manifest.csv/labels.json/queries/ still form a valid, loadable
+    # dataset (require_images=True, the experiment-runner default), not just
+    # that the CSV/JSON shapes parse.
     from evaluation import dataset as dataset_package
 
     dataset_dir = dataset_package.__path__[0]
-    dataset = load_dataset(dataset_dir, require_images=False)
+    dataset = load_dataset(dataset_dir)
 
-    assert dataset.version == "eval-v1"
-    assert dataset.queries == ()
+    assert dataset.version == "pilot-real-v1"
+    assert len(dataset.queries) == 7
+    assert all(query.labels for query in dataset.queries)
 
 
 @pytest.mark.parametrize(
