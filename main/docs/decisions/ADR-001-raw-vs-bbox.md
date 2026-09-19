@@ -21,6 +21,13 @@ This decision took three corrections to reach:
 4. `docs/evidence/milestone-10-catalog-rebalance.md` resampled the catalog with a per-sub-style
    quota and relabeled the affected pooled candidates, widening RAW's lead further still
    (0.812 vs. 0.650 NDCG@10) — the strongest and cleanest evidence for this ADR to date.
+5. `docs/evidence/milestone-10-cluster-validation.md` added 3 queries (N=14) with a deliberately
+   dense, verified-relevant candidate pool (15/16, 12/16, 15/16) to rule out label scarcity as an
+   explanation for low scores. RAW still wins overall (0.640 vs. 0.420–0.552 NDCG@10), and this
+   confirmed — on evidence that can no longer be explained by sparse labels or catalog skew — that
+   `pants`/denim fine-grained discrimination is a real, unresolved embedding weakness (Q012: only
+   a third of 15 verified-relevant items recalled in the top 10). This is orthogonal to the RAW vs.
+   BBox question but strengthens confidence that this evaluation pipeline surfaces real signal.
 
 The original (buggy) Pilot Evidence, the N=7 bug-fixed re-run, and the N=11 pre-rebalance numbers
 are all kept below/linked as the historical record of what was found and when;

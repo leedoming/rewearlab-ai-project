@@ -73,19 +73,20 @@ def test_load_dataset_combines_manifest_and_labels(tmp_path):
 
 def test_real_repository_dataset_loads_with_images_present():
     # As of the Milestone 10 real-data pilot (docs/evidence/milestone-10-pilot.md,
-    # expanded in docs/evidence/milestone-10-final-decision.md), evaluation/dataset
-    # is no longer the empty scaffold -- it holds 11 real, pooled-labeled queries
-    # across all 4 collections. This regression-tests that the committed
-    # query_manifest.csv/labels.json/queries/ still form a valid, loadable
-    # dataset (require_images=True, the experiment-runner default), not just
-    # that the CSV/JSON shapes parse.
+    # expanded in docs/evidence/milestone-10-final-decision.md, then again in
+    # docs/evidence/milestone-10-cluster-validation.md with 3 densified-relevant-
+    # set queries), evaluation/dataset is no longer the empty scaffold -- it
+    # holds 14 real, pooled-labeled queries across all 4 collections. This
+    # regression-tests that the committed query_manifest.csv/labels.json/queries/
+    # still form a valid, loadable dataset (require_images=True, the
+    # experiment-runner default), not just that the CSV/JSON shapes parse.
     from evaluation import dataset as dataset_package
 
     dataset_dir = dataset_package.__path__[0]
     dataset = load_dataset(dataset_dir)
 
     assert dataset.version == "pilot-real-v1"
-    assert len(dataset.queries) == 11
+    assert len(dataset.queries) == 14
     assert all(query.labels for query in dataset.queries)
 
 
