@@ -1,0 +1,11 @@
+# Python bytecode caches (never committed; found accidentally committed
+# multiple times across this project's history before this file existed).
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Milestone 10 real-data pilot: local ChromaDB + intermediate JSON dumps that
+# reference an external, non-portable filesystem path. The pilot's *outputs*
+# that matter (real dataset queries/labels, ADR updates, evidence doc) are
+# committed elsewhere; this directory is throwaway working data.
+main/evaluation/pilot/_local/

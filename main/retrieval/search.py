@@ -87,7 +87,13 @@ def search_collection(
         )
     else:
         raw_results = collection.query(
-            query_embeddings=[list(query_embedding)],
+            # float(...) is required, not just list(...): `embed_image`
+            # returns a numpy float32 array, and newer chromadb releases
+            # (found while running Milestone 10's real-data pilot -- see
+            # docs/evidence/milestone-10-pilot.md) reject a list of numpy
+            # float32 *scalars* even though a list of native Python floats
+            # or a numpy array itself are both accepted.
+            query_embeddings=[[float(value) for value in query_embedding]],
             n_results=top_k,
             include=["metadatas", "distances"],
         )

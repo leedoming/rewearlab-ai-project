@@ -1,0 +1,29 @@
+# Final pipeline configuration — IMPLEMENTATION_SPEC.md section 50.
+#
+# MUST (section 50): "실험 이전에 TODO 값을 임의로 확정하지 않는다" -- do not
+# arbitrarily finalize TODO values before the experiments that justify them
+# have actually been run.
+#
+# `preprocessing` is decided (ADR-001, docs/evidence/milestone-10-final-decision.md):
+# a real, deterministic, spec-compliant golden set (N=11, all 4 collections,
+# passes evaluation.golden_set.validate_golden_set()) confirms RAW beats
+# every BBox policy tested. Every other value below remains TBD -- E5-E8
+# (category filtering, padding) and Milestone 9's sensitivity sweep were
+# never run against real data, so filling them in now would be exactly the
+# fabrication this project's evidence docs have refused to do at every
+# prior milestone. See docs/decisions/ADR-001 through ADR-005 for the full
+# reasoning behind each value, decided or not.
+
+final_pipeline:
+  preprocessing: raw  # DECIDED -- ADR-001, milestone-10-final-decision.md
+  bbox_policy: TBD     # moot given preprocessing=raw; category_confidence/category_largest would win if BBox were used (ADR-002)
+  padding_ratio: TBD   # moot given preprocessing=raw (ADR-004)
+
+  category_filter:
+    policy: TBD        # none | hard | soft -- E5/E6 never run against real data (ADR-003)
+
+  detection:
+    threshold: TBD     # 0.3 | 0.4 | 0.5 -- Milestone 9 sensitivity sweep never run against real data
+
+  retrieval:
+    top_k: 10          # matches every real experiment run so far (E0-E4); not independently swept

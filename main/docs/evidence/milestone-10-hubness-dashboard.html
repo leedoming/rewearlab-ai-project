@@ -1,0 +1,639 @@
+<title>Hubness Audit</title>
+<meta name="description" content="RAW vs BBox 임베딩에서 특정 의류가 과다 검색되는 현상을 실제 무신사 상품사진 2,160장으로 검증한 리포트">
+<style>
+  :root{
+    --ink:#1b1e1a; --paper:#eef0ea; --panel:#ffffff; --panel-2:#f6f7f2; --line:#d7dbd0; --muted:#5c6157;
+    --accent:#2f6f5e; --accent-soft:#e4efe9; --warn:#b5651d; --warn-soft:#f6e9dc; --bad:#a4432f; --bad-soft:#f4e2dd;
+    --raw:#a4432f; --bbox:#2f6f5e;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans',system-ui,sans-serif;
+    --serif:'Fraunces',Georgia,serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#e7e9e1; --paper:#12140f; --panel:#191c15; --panel-2:#20241b; --line:#2b3025; --muted:#9aa08f;
+      --accent:#77c1a8; --accent-soft:#1c2c25; --warn:#e0a163; --warn-soft:#332618; --bad:#e08a72; --bad-soft:#332019;
+      --raw:#e08a72; --bbox:#77c1a8;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#e7e9e1; --paper:#12140f; --panel:#191c15; --panel-2:#20241b; --line:#2b3025; --muted:#9aa08f;
+    --accent:#77c1a8; --accent-soft:#1c2c25; --warn:#e0a163; --warn-soft:#332618; --bad:#e08a72; --bad-soft:#332019;
+    --raw:#e08a72; --bbox:#77c1a8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--paper); color:var(--ink); font-family:var(--sans);
+    margin:0; padding:0 20px; line-height:1.6; font-size:15px;
+  }
+  .wrap{max-width:900px; margin:0 auto; padding-block:48px 80px;}
+  .eyebrow{
+    font-family:var(--mono); text-transform:uppercase; letter-spacing:.12em; font-size:12px;
+    color:var(--accent); margin:0 0 10px;
+  }
+  h1{
+    font-family:var(--serif); font-size:clamp(28px,5vw,44px); font-weight:600; line-height:1.15;
+    margin:0 0 16px; text-wrap:balance; letter-spacing:-0.01em;
+  }
+  .lede{font-size:17px; color:var(--muted); max-width:60ch; margin:0 0 32px;}
+  h2{
+    font-family:var(--serif); font-size:24px; font-weight:600; margin:0 0 6px; text-wrap:balance;
+  }
+  h3{font-family:var(--sans); font-size:15px; font-weight:700; margin:0 0 12px;}
+  section{margin-top:56px;}
+  .section-head{border-left:3px solid var(--accent); padding-left:16px; margin-bottom:24px;}
+  .section-sub{color:var(--muted); font-size:14px; max-width:65ch;}
+  p{margin:0 0 14px;}
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:24px;
+  }
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
+  @media (max-width:640px){ .grid2,.grid3{grid-template-columns:1fr;} }
+
+  .stat-row{display:flex; flex-wrap:wrap; gap:14px; margin-bottom:8px;}
+  .stat{
+    flex:1 1 150px; background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:16px 18px;
+  }
+  .stat .n{font-family:var(--mono); font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; display:block;}
+  .stat .l{font-size:12.5px; color:var(--muted);}
+  .stat.flag{border-color:var(--warn); background:var(--warn-soft);}
+  .stat.flag .n{color:var(--warn);}
+
+  .steps{list-style:none; margin:0; padding:0; counter-reset:step;}
+  .steps li{
+    counter-increment:step; position:relative; padding:0 0 20px 40px; border-left:1px solid var(--line);
+    margin-left:14px;
+  }
+  .steps li:last-child{border-color:transparent; padding-bottom:0;}
+  .steps li::before{
+    content:counter(step); position:absolute; left:-14px; top:0; width:28px; height:28px; border-radius:50%;
+    background:var(--panel); border:1px solid var(--accent); color:var(--accent); font-family:var(--mono);
+    font-size:13px; font-weight:600; display:flex; align-items:center; justify-content:center;
+  }
+  .steps b{display:block; margin-bottom:2px;}
+  .steps span{color:var(--muted); font-size:14px;}
+
+  figure{margin:0;}
+  figcaption{font-size:12.5px; color:var(--muted); margin-top:8px;}
+  .chart-title{font-size:13px; font-weight:700; margin-bottom:2px;}
+  .chart-note{font-size:12px; color:var(--muted); margin-bottom:12px;}
+  .bars{display:flex; flex-direction:column; gap:7px;}
+  .bar-row{display:grid; grid-template-columns:88px 1fr 54px; align-items:center; gap:8px; font-size:12.5px;}
+  .bar-row .label{color:var(--muted); text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .bar-track{background:var(--panel-2); border-radius:4px; height:16px; position:relative; overflow:hidden;}
+  .bar-fill{height:100%; border-radius:4px;}
+  .bar-row .val{font-family:var(--mono); font-variant-numeric:tabular-nums; color:var(--ink);}
+
+  .legend{display:flex; gap:16px; font-size:12.5px; margin-bottom:10px; color:var(--muted);}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+  .swatch{width:10px; height:10px; border-radius:2px; display:inline-block;}
+
+  .gallery{display:grid; grid-template-columns:repeat(4,1fr); gap:12px;}
+  @media (max-width:720px){ .gallery{grid-template-columns:repeat(2,1fr);} }
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  .card img{width:100%; aspect-ratio:3/4; object-fit:cover; display:block; background:var(--panel-2);}
+  .card .body{padding:10px 12px;}
+  .card .tag{
+    font-family:var(--mono); font-size:11px; padding:2px 7px; border-radius:20px; display:inline-block;
+    margin-bottom:6px;
+  }
+  .tag.raw{background:var(--bad-soft); color:var(--raw);}
+  .tag.bbox{background:var(--accent-soft); color:var(--bbox);}
+  .tag.contrast{background:var(--panel-2); color:var(--muted);}
+  .card .cap{font-size:12.5px; color:var(--muted);}
+  .card .count{font-family:var(--mono); font-weight:700; font-size:15px;}
+
+  .finding{
+    border-left:3px solid var(--warn); background:var(--warn-soft); border-radius:0 10px 10px 0;
+    padding:16px 20px; margin:18px 0;
+  }
+  .finding b{color:var(--warn);}
+
+  ul.check{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px;}
+  ul.check li{
+    display:flex; gap:10px; align-items:flex-start; font-size:14.5px; padding:12px 14px;
+    background:var(--panel-2); border-radius:8px;
+  }
+  ul.check li::before{content:"□"; color:var(--accent); font-size:15px; line-height:1.4;}
+
+  table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  th,td{text-align:left; padding:9px 10px; border-bottom:1px solid var(--line);}
+  th{font-family:var(--mono); font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:600;}
+  td.num, th.num{text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums;}
+  tr.best td{font-weight:700; color:var(--accent);}
+
+  footer{margin-top:64px; padding-top:20px; border-top:1px solid var(--line); font-size:12.5px; color:var(--muted);}
+  code{font-family:var(--mono); background:var(--panel-2); padding:1px 5px; border-radius:4px; font-size:0.92em;}
+</style>
+
+<div class="wrap">
+
+  <p class="eyebrow">RE:WEAR Lab · Embedding Validation Pilot</p>
+  <h1>이 흰 티셔츠는 왜 모든 검색에 걸려나올까</h1>
+  <p class="lede">
+    RAW 임베딩으로 만든 MVP에서 특정 상품이 관련 없는 검색에도 반복적으로 튀어나오는 현상을 발견했다.
+    실제 무신사 상품사진 2,160장으로 원인을 재현하고, detection/bbox 크롭이 그 원인을 실제로 해결하는지
+    정량적으로 검증했다.
+  </p>
+
+  <div class="stat-row">
+    <div class="stat"><span class="n">2,160</span><span class="l">실제 상품 이미지 스캔</span></div>
+    <div class="stat"><span class="n">24.8%</span><span class="l">다중 아이템 / 전신샷 썸네일</span></div>
+    <div class="stat"><span class="n">Gini 0.530</span><span class="l">RAW 임베딩 편중도</span></div>
+    <div class="stat flag"><span class="n">거의 그대로</span><span class="l">BBox 적용 후 Gini 0.524</span></div>
+  </div>
+
+  <div class="finding" style="border-left-color:var(--bad); background:var(--bad-soft);">
+    <b style="color:var(--bad)">이 검증 과정에서 실제 프로덕션 버그를 하나 찾아 고쳤다</b> — 임베딩 모델이
+    검증용 결정적 transform이 아니라 <b>랜덤 크롭이 포함된 학습용 transform</b>으로 잘못 로드되고 있었다
+    (리팩토링 이전 원본 코드부터 있던 버그). 아래 "발견한 진짜 버그" 섹션 참고. 이 문서의 나머지 수치는
+    버그 수정 <i>이전</i>에 계산된 것이며, 수정 후 재검증 결과 일부 결론이 뒤집혔다.
+  </div>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow" style="margin-bottom:2px">Background</p>
+      <h2>문제를 발견한 순서</h2>
+    </div>
+    <ol class="steps">
+      <li><b>MVP: Marqo 임베딩 모델을 그대로 투입</b><span>사진 업로드 → 유사 상품 Top-K 검색.</span></li>
+      <li><b>육안으로 봐도 안 유사한 결과가 섞여 나옴</b><span>특정 쿼리와 무관해 보이는 상품이 계속 상위에 등장.</span></li>
+      <li><b>카탈로그 전체를 한 바퀴 돌려 Top-K 노출 빈도 집계</b><span>몇몇 상품이 이상치로 유독 자주 검색됨을 확인.</span></li>
+      <li><b>그 상품들의 썸네일을 직접 확인</b><span>일반 상품컷과 달리 의류 여러 개가 같이 보이거나 전신 착장샷.</span></li>
+      <li><b>Detection + BBox 크롭 도입</b><span>제품 영역만 잘라 임베딩 — 그런데 이 판단을 정량적으로 검증한 적은 없었음.</span></li>
+    </ol>
+    <p style="margin-top:20px; color:var(--muted); font-size:14px;">
+      → 이 리포트는 5번 판단을 사후에 정량 검증한다. 결론은 예상과 달랐다 (아래 "발견" 참고).
+    </p>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow" style="margin-bottom:2px">EDA</p>
+      <h2>실제 카탈로그의 "지저분한 썸네일" 실태</h2>
+      <p class="section-sub">
+        실제 detection 모델(yainage90/fashion-object-detection)을 2,160장 전체에 돌려, 한 이미지에서 감지된
+        의류 개수를 셌다. 1개 = 정상 단일 상품컷, 2개 이상 = 다중 아이템/전신샷으로 분류.
+      </p>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <p class="chart-title">카테고리별 이미지 수</p>
+        <p class="chart-note">n = 2,160 (자켓 1 / 가디건 4 / 바지 5 등 소량 카테고리 제외)</p>
+        <div class="bars" id="chart-category"></div>
+      </div>
+      <div class="panel">
+        <p class="chart-title">카테고리별 "지저분한" 썸네일 비율</p>
+        <p class="chart-note">2개 이상 감지된 이미지 비율 (n≥50인 카테고리만)</p>
+        <div class="bars" id="chart-messy"></div>
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:14px;">
+      <div class="panel">
+        <p class="chart-title">이미지당 감지 개수 분포</p>
+        <p class="chart-note">전체 2,160장</p>
+        <div class="bars" id="chart-detcount"></div>
+      </div>
+      <div class="panel">
+        <p class="chart-title">감지된 라벨 빈도</p>
+        <p class="chart-note">yainage90 모델의 7개 클래스</p>
+        <div class="bars" id="chart-labels"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow" style="margin-bottom:2px">Experiment</p>
+      <h2>Hubness 검증: RAW vs BBox</h2>
+      <p class="section-sub">
+        2,160장 전체를 서로에 대해 leave-one-out으로 검색 (각 이미지를 쿼리 삼아 나머지 2,159장 중 Top-10을
+        코사인 유사도로 계산). 각 상품이 "남의 Top-10"에 뽑힌 횟수를 집계 — 이 횟수가 비정상적으로 높은
+        상품이 hub다. BBox는 <code>highest_confidence</code> 정책(카테고리 무관, 최초 MVP 수준 fallback)으로 크롭.
+      </p>
+    </div>
+
+    <div class="grid3" style="margin-bottom:18px;">
+      <div class="stat"><span class="n">0.5287</span><span class="l">Gini — RAW</span></div>
+      <div class="stat"><span class="n">0.5267</span><span class="l">Gini — BBox</span></div>
+      <div class="stat flag"><span class="n">133 → 143</span><span class="l">최대 피검색 횟수 (RAW→BBox, 오히려 증가)</span></div>
+    </div>
+
+    <div class="panel">
+      <p class="chart-title">피검색 횟수 분포 (Top-10 기준, 평균 10회가 "정상")</p>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--raw)"></i>RAW</span>
+        <span><i class="swatch" style="background:var(--bbox)"></i>BBox (highest_confidence)</span>
+      </div>
+      <div class="bars" id="chart-hubhist"></div>
+    </div>
+
+    <h3 style="margin-top:26px;">실제 Top hub 아이템</h3>
+    <div class="gallery" id="hub-gallery"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow" style="margin-bottom:2px">Finding</p>
+      <h2>가설은 틀렸다 — 그리고 그게 더 중요한 발견이다</h2>
+    </div>
+    <p>
+      원래 가설: "다중 아이템/전신샷 썸네일이 hub가 되고, bbox 크롭이 이를 줄여줄 것이다." 실제로는:
+    </p>
+    <div class="finding">
+      <b>Hub의 정체는 messy 썸네일이 아니라 "무난한 디자인"이었다.</b>
+      상위 hub 15개 중 14개가 단일 감지(clean shot)였고, 대부분 무지 화이트/베이직 티셔츠·후디였다.
+      전체 풀에서 messy 비율은 24.8%인데, 상위 1% hub 중 messy 비율은 9.1% — 오히려 <b>평균보다 낮다.</b>
+    </div>
+    <p>
+      즉 이 임베딩 공간에서 hub를 만드는 원인은 "사진에 뭐가 같이 찍혔는가"가 아니라
+      "옷 자체가 얼마나 무난하고 특징이 적은가"였다. 무지 화이트 티셔츠는 크롭을 해도 여전히 무지 화이트
+      티셔츠라서, bbox는 이 문제에 거의 영향을 주지 못한다 (Gini 0.5287 → 0.5267, 사실상 동일).
+    </p>
+    <div class="grid2" style="margin-top:16px;">
+      <figure class="card" style="border:1px solid var(--line); border-radius:10px; overflow:hidden;">
+        <img id="img-hub-example" alt="RAW 기준 최다 피검색 상품">
+        <div class="body">
+          <span class="tag raw">RAW hub · 133회</span>
+          <p class="cap">무지 화이트 박스 로고 티 — 배경도, 디자인 디테일도 거의 없어 임베딩 공간에서 "평균"에 가깝다.</p>
+        </div>
+      </figure>
+      <figure class="card" style="border:1px solid var(--line); border-radius:10px; overflow:hidden;">
+        <img id="img-contrast-example" alt="피검색 횟수가 낮은 상품">
+        <div class="body">
+          <span class="tag contrast">피검색 3회</span>
+          <p class="cap">뚜렷한 핑크 컬러 + 독특한 실루엣 — 임베딩 공간에서 확실히 구분되는 위치를 차지한다.</p>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow" style="margin-bottom:2px">Cross-check</p>
+      <h2>그럼 bbox 크롭 자체는 의미가 없었나 — 별개의 파일럿에서는 확실히 있었다</h2>
+      <p class="section-sub">
+        같은 프로젝트의 또 다른 실험(N=7 golden set, 3개 collection)에서는 category-aware bbox 정책이 실제로
+        검색 품질(NDCG@10)을 끌어올렸다. 단, 이번 hub 실험과는 <b>다른 이유</b>였다.
+      </p>
+    </div>
+    <div class="panel">
+      <table>
+        <thead><tr><th>실험</th><th>정책</th><th class="num">NDCG@10</th><th class="num">MRR</th><th class="num">Recall@10</th></tr></thead>
+        <tbody>
+          <tr><td>E0</td><td>RAW</td><td class="num">0.712</td><td class="num">0.857</td><td class="num">0.881</td></tr>
+          <tr><td>E1</td><td>highest_confidence</td><td class="num">0.603</td><td class="num">0.714</td><td class="num">0.655</td></tr>
+          <tr><td>E2</td><td>largest</td><td class="num">0.601</td><td class="num">0.714</td><td class="num">0.667</td></tr>
+          <tr class="best"><td>E3</td><td>category_confidence</td><td class="num">0.738</td><td class="num">0.857</td><td class="num">0.810</td></tr>
+          <tr><td>E4</td><td>category_largest</td><td class="num">0.714</td><td class="num">0.857</td><td class="num">0.810</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:14px;">
+      여기서 bbox가 이긴 이유는 hub 억제가 아니라 <b>"엉뚱한 카테고리 선택 방지"</b>였다 — 다중 아이템 사진에서
+      category 정보 없이 크롭하면(E1/E2) 아예 다른 종류의 옷(예: 니트 쿼리인데 청바지)을 잘라서 오히려 RAW보다
+      나빠졌고, category-aware 크롭(E3)만 이를 피했다. <b>즉 bbox의 진짜 효과는 "hub 억제"가 아니라
+      "카테고리 오검출 방지"였다</b> — 처음 가설과는 다른 메커니즘으로 유효했던 것.
+    </p>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow" style="margin-bottom:2px">Mitigation</p>
+      <h2>그럼 뭘 해봤고, 뭐가 배포 가능했나</h2>
+      <p class="section-sub">
+        실제 UI가 카테고리별로 Top-K를 나눠 검색한다는 점에 착안해 두 가지를 테스트했다. 하나는 실패,
+        하나는 효과는 컸지만 <b>실제 golden set으로 검증하니 관련도가 깎였다</b> — 배포 전에 반드시
+        확인해야 하는 이유가 정확히 여기서 드러났다.
+      </p>
+    </div>
+
+    <div class="grid2">
+      <div class="panel">
+        <p class="chart-title">① 카테고리 내부에서만 검색 (실제 UI 방식 재현)</p>
+        <p class="chart-note">RAW 기준</p>
+        <table>
+          <thead><tr><th></th><th class="num">Gini</th><th class="num">Max</th></tr></thead>
+          <tbody>
+            <tr><td>전체 풀 검색</td><td class="num">0.5287</td><td class="num">133</td></tr>
+            <tr><td>카테고리 내부만</td><td class="num">0.5386</td><td class="num">132</td></tr>
+          </tbody>
+        </table>
+        <p class="cap" style="margin-top:10px;">효과 없음 — 오히려 소폭 악화. 무난한 티셔츠는 top 카테고리
+          안에서도 여전히 "평균"이라 범위를 좁혀도 안 밀려남.</p>
+      </div>
+      <div class="panel">
+        <p class="chart-title">② Mean-centering (전체 평균 벡터 제거)</p>
+        <p class="chart-note">RAW 기준, hub 지표 vs 실제 golden set 검증</p>
+        <table>
+          <thead><tr><th></th><th class="num">Hub Gini</th><th class="num">NDCG@10</th></tr></thead>
+          <tbody>
+            <tr><td>원본</td><td class="num">0.5287</td><td class="num">0.571</td></tr>
+            <tr><td>Full centering</td><td class="num" style="color:var(--accent)">0.3390</td><td class="num" style="color:var(--bad)">0.490</td></tr>
+          </tbody>
+        </table>
+        <p class="cap" style="margin-top:10px;">Hub은 확실히 줄었지만(-36%), 실제 라벨링된 golden set(N=7)
+          에서 NDCG가 같이 떨어짐(-14%), Recall@10은 -26%. <b>배포 안 함.</b></p>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:14px;">
+      <p class="chart-title">③ Partial centering 스윕 — 절충점 탐색</p>
+      <p class="chart-note">centered(v) = normalize(v − α·mean).  α=0: 원본, α=1: full centering</p>
+      <table>
+        <thead><tr><th>α</th><th class="num">Hub Gini</th><th class="num">Hub Max</th><th class="num">NDCG@10</th><th class="num">MRR</th></tr></thead>
+        <tbody>
+          <tr><td>0.0</td><td class="num">0.5287</td><td class="num">133</td><td class="num">0.6041</td><td class="num">0.7143</td></tr>
+          <tr><td>0.3</td><td class="num">0.4870</td><td class="num">113</td><td class="num">0.6020</td><td class="num">0.7143</td></tr>
+          <tr class="best"><td>0.4</td><td class="num">0.4667</td><td class="num">108</td><td class="num">0.6355</td><td class="num">0.7857</td></tr>
+          <tr><td>0.5</td><td class="num">0.4435</td><td class="num">99</td><td class="num">0.6057</td><td class="num">0.7143</td></tr>
+          <tr><td>0.6</td><td class="num">0.4179</td><td class="num">85</td><td class="num">0.6034</td><td class="num">0.7143</td></tr>
+          <tr><td>0.8</td><td class="num">0.3679</td><td class="num">61</td><td class="num">0.5846</td><td class="num">0.7143</td></tr>
+          <tr><td>1.0</td><td class="num">0.3390</td><td class="num">43</td><td class="num">0.5066</td><td class="num">0.6000</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="finding">
+      <b>단, 이 표를 그대로 믿으면 안 된다.</b> 같은 187장을 같은 모델로 두 번 재임베딩했을 뿐인데
+      NDCG@10이 0.571 → 0.604로 흔들렸다 (CPU 멀티스레드 부동소수점 연산 순서 차이로 추정). N=7 규모에서는
+      "설정 차이로 인한 변화"와 "그냥 노이즈"가 같은 크기다 — α=0.4가 진짜 최적점인지는 반복 실행이나
+      더 큰 golden set으로 재확인이 필요하다. <b>이번 세션에서 내리는 최종 배포 결정이 아니라, 다음에
+      검증할 구체적인 후보를 하나 좁힌 것.</b>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow" style="margin-bottom:2px">Root Cause</p>
+      <h2>재현성 문제를 파고들었더니 진짜 프로덕션 버그가 나왔다</h2>
+      <p class="section-sub">
+        Partial centering의 재현성 문제("같은 걸 두 번 돌렸는데 값이 다름")를 그냥 "노이즈"로 넘기지 않고
+        원인을 추적했다. 모델 forward pass 자체는 완벽히 결정적이었다 — 문제는 <b>전처리 단계</b>였다.
+      </p>
+    </div>
+
+    <div class="panel" style="font-family:var(--mono); font-size:13px; overflow-x:auto;">
+      <p class="chart-title" style="font-family:var(--sans);">retrieval/models.py — 실제 코드</p>
+      <pre style="margin:0; white-space:pre-wrap;">model, preprocess_val, _ = open_clip.create_model_and_transforms(model_name)
+<span style="color:var(--bad);"># open_clip은 (model, preprocess_train, preprocess_val) 순서로 반환한다.
+# 변수명은 preprocess_val이지만 실제로는 preprocess_train이 들어갔고,
+# 진짜 preprocess_val은 _ 로 버려졌다.</span></pre>
+    </div>
+
+    <div class="grid2" style="margin-top:14px;">
+      <div class="panel">
+        <p class="chart-title">실제로 로드되고 있던 transform</p>
+        <pre style="font-family:var(--mono); font-size:12px; white-space:pre-wrap; margin:0;">RandomResizedCrop(
+  size=(224,224), scale=(0.9,1.0),
+  ratio=(0.75, 1.33), ...)
+MaybeConvertMode()
+MaybeToTensor()
+Normalize(...)</pre>
+        <p class="cap" style="margin-top:10px;">카탈로그 색인 시점과 쿼리 검색 시점 <b>둘 다</b>에서 매번
+          랜덤하게 90~100% 영역을 잘라내고 있었다. 리팩토링 이전 원본 코드(`main-app/app.py`,
+          `embedding/musinsa_to_chromadb.py`)부터 있던 버그.</p>
+      </div>
+      <div class="panel">
+        <p class="chart-title">수정 전후 — 같은 이미지 3번 임베딩</p>
+        <table>
+          <thead><tr><th></th><th class="num">최대 차이</th></tr></thead>
+          <tbody>
+            <tr><td>수정 전</td><td class="num" style="color:var(--bad)">최대 2.8×10⁻²</td></tr>
+            <tr class="best"><td>수정 후</td><td class="num">0.0 (완전 동일)</td></tr>
+          </tbody>
+        </table>
+        <p class="cap" style="margin-top:10px;">수정: <code>model, _preprocess_train, preprocess_val = open_clip.create_model_and_transforms(...)</code>
+          — 세 번째 값을 쓰도록 바로잡음.</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top:26px;">수정 후 재검증 — 일부 결론이 뒤집혔다</h3>
+    <div class="panel">
+      <p class="chart-title">E0-E4 재검증 (버그 수정 전 vs 후)</p>
+      <table>
+        <thead><tr><th>실험</th><th class="num">NDCG (버그 있음)</th><th class="num">NDCG (수정 후)</th></tr></thead>
+        <tbody>
+          <tr class="best"><td>E0 · RAW</td><td class="num">0.712</td><td class="num">0.624</td></tr>
+          <tr><td>E1 · highest_confidence</td><td class="num">0.603</td><td class="num">0.464</td></tr>
+          <tr><td>E2 · largest</td><td class="num">0.601</td><td class="num">0.449</td></tr>
+          <tr><td>E3 · category_confidence</td><td class="num" style="color:var(--bad)">0.738 (1위였음)</td><td class="num">0.545</td></tr>
+          <tr><td>E4 · category_largest</td><td class="num">0.714</td><td class="num">0.545</td></tr>
+        </tbody>
+      </table>
+      <p class="cap" style="margin-top:10px;">버그가 있을 땐 E3(category_confidence)가 1위였는데, 수정
+        후에는 <b>RAW(E0)가 1위</b>로 바뀌었다. 두 번 재실행해서 완전히 동일한 값(bit-identical)이
+        나오는 것까지 확인함.</p>
+    </div>
+
+    <div class="panel" style="margin-top:14px;">
+      <p class="chart-title">Partial centering 재검증 — α=0.4 "최적점"은 노이즈였다</p>
+      <table>
+        <thead><tr><th>α</th><th class="num">Hub Gini</th><th class="num">NDCG (버그, 노이즈)</th><th class="num">NDCG (수정 후)</th></tr></thead>
+        <tbody>
+          <tr><td>0.0</td><td class="num">0.530</td><td class="num">0.604</td><td class="num">0.543</td></tr>
+          <tr><td>0.3</td><td class="num">0.489</td><td class="num">0.602</td><td class="num">0.550</td></tr>
+          <tr><td>0.4</td><td class="num">0.469</td><td class="num" style="color:var(--bad)">0.636 (최고였음)</td><td class="num">0.536</td></tr>
+          <tr><td>0.7</td><td class="num">0.393</td><td class="num">0.597</td><td class="num">0.519</td></tr>
+          <tr><td>1.0</td><td class="num">0.335</td><td class="num">0.507</td><td class="num">0.467</td></tr>
+        </tbody>
+      </table>
+      <p class="cap" style="margin-top:10px;">수정 후에는 α가 커질수록 NDCG가 <b>단조적으로 하락</b>한다 —
+        "공짜로 hub도 줄이고 품질도 올리는" α는 존재하지 않는다. 이전에 찾았다고 생각한 α=0.4 스윗스팟은
+        전적으로 버그가 만든 노이즈였다.</p>
+    </div>
+
+    <div class="finding">
+      <b>Hub 분석의 핵심 결론(무난한 디자인이 hub 원인, bbox로 안 고쳐짐)은 버그 수정 후에도 그대로다</b>
+      (Gini 0.529→0.530, 0.527→0.524 — 거의 변화 없음). 버그가 뒤집은 건 <b>E0-E4 순위와 partial
+      centering 권장안</b> 두 가지였다.
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow" style="margin-bottom:2px">Final Decision</p>
+      <h2>N=11, 4개 카테고리 전부 — 처음으로 spec 기준을 통과한 golden set</h2>
+      <p class="section-sub">
+        dress_skirts 데이터가 없다는 게 이 프로젝트 전체의 마지막 구멍이었다. 또 다른 개인 프로젝트에서
+        원피스 25장/치마 14장을 찾았고, 그중 콜라주성 프로모션 배너(파일명에 옷 7개가 한꺼번에 나열된
+        것들)를 detection 개수로 자동 필터링해서 순수 단일 상품 사진 13장을 골라냈다. 이후 pants/outer
+        카탈로그가 한 하위 스타일(청바지 95%, 후드티 97%)에 쏠려있던 걸 발견해 하위 스타일별 균형
+        샘플링으로 다시 뽑고, 바뀐 후보 79개 중 62개를 새로 라벨링해 재검증까지 마쳤다.
+      </p>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat" style="border-color:var(--accent); background:var(--accent-soft);"><span class="n" style="color:var(--accent)">0.81</span><span class="l">NDCG@10 (1.0 = 완벽한 순위)</span></div>
+      <div class="stat"><span class="n">85%</span><span class="l">정답이 검색 결과 1위로 나온 비율 (MRR)</span></div>
+      <div class="stat"><span class="n">64%</span><span class="l">상위 5개 중 실제로 유관한 상품 비율</span></div>
+    </div>
+
+    <div class="panel">
+      <p class="chart-title">최종 E0-E4 (N=11, 4 collection, 하위 스타일 균형 샘플링 재검증)</p>
+      <table>
+        <thead><tr><th>실험</th><th>정책</th><th class="num">NDCG@10</th><th class="num">MRR</th><th class="num">Precision@5</th></tr></thead>
+        <tbody>
+          <tr class="best"><td>E0</td><td>RAW</td><td class="num">0.812</td><td class="num">0.848</td><td class="num">0.636</td></tr>
+          <tr><td>E1</td><td>highest_confidence</td><td class="num">0.636</td><td class="num">0.697</td><td class="num">0.509</td></tr>
+          <tr><td>E2</td><td>largest</td><td class="num">0.636</td><td class="num">0.697</td><td class="num">0.509</td></tr>
+          <tr><td>E3</td><td>category_confidence</td><td class="num">0.650</td><td class="num">0.697</td><td class="num">0.527</td></tr>
+          <tr><td>E4</td><td>category_largest</td><td class="num">0.650</td><td class="num">0.697</td><td class="num">0.527</td></tr>
+        </tbody>
+      </table>
+      <p class="cap" style="margin-top:10px;">카탈로그 편중을 없애자 RAW의 우위가 오히려 더 커졌다 (NDCG 0.735→0.812,
+        재편중 전 대비). <b>ADR-001: RAW로 최종 결정</b> — 매 지표에서 모든 bbox 정책을 이김.</p>
+    </div>
+
+    <div class="finding">
+      <b>카테고리별로 뜯어보면 얘기가 더 재밌다.</b> <code>pants</code>는 카탈로그를 다시 균형 잡자
+      다크워시 청바지 쿼리(Q001)가 NDCG <b>1.0(완벽)</b>으로 뛰었다 — "pants가 원래 약하다"던 이전 결론은
+      사실 카탈로그가 청바지 95%로 쏠려 진짜 유사 상품이 순위 25~47위 밖으로 밀려난 샘플링 문제였다.
+      다만 화이트 와이드 데님 쿼리(Q002)는 카탈로그 안에 유사 상품이 <b>0개</b>라는 진짜 커버리지 공백도
+      같이 드러났다 — 숫자를 좋게만 보이려고 빼지 않고 그대로 포함했다. <code>outer</code>는 남은 가디건을
+      전부(3/3) 넣어도 category-aware bbox가 여전히 회복하지 못했다(0.541, RAW는 0.877) — "가디건이 부족해서"
+      라는 가설은 이번에 기각됐고, 진짜 원인은 아직 미해결로 남겨뒀다.
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow" style="margin-bottom:2px">Next</p>
+      <h2>그래서 무엇을 고쳐야 하는가</h2>
+    </div>
+    <ul class="check">
+      <li><div><b>가장 먼저: transform 버그 수정을 그대로 배포한다.</b> 다른 모든 결론과 무관하게, 같은
+        사진으로 검색해도 매번 다른 결과가 나오는 건 그 자체로 사용자에게 보이는 정확성 문제다.</div></li>
+      <li><div><b>Full mean-centering은 배포 안 함 — golden set 검증에서 NDCG가 떨어졌다.</b>
+        Partial centering도 재검증 결과 "공짜 스윗스팟"이 없는 걸로 확인됨 (α가 커질수록 NDCG가
+        단조 하락). Hub 억제와 relevance는 진짜 트레이드오프이고, 이건 제품 판단이 필요한 영역이다.</div></li>
+      <li><div><b>ADR-001: RAW로 최종 결정됨.</b> N=11·4개 카테고리·결정적 재현으로 확정 — 더 이상
+        provisional이 아니다. <code>final_config.yaml</code>의 <code>preprocessing</code>도
+        <code>raw</code>로 반영함.</div></li>
+      <li><div><b>Hub 억제는 bbox로 해결될 문제가 아니다.</b> 무난한 디자인이 원인이므로, 재순위화(re-ranking)로
+        고빈도 피검색 상품에 페널티를 주거나, 텍스트/속성 정보를 결합한 하이브리드 검색을 검토해야 한다.</div></li>
+      <li><div><b>"category-aware bbox가 카테고리 오검출을 막는다"는 메커니즘 자체는 여전히 유효하다</b>
+        (버그 수정 후에도 E3/E4가 E1/E2를 확실히 이김) — 다만 그게 "hub 방지"는 아니라는 것과, RAW 대비
+        전체 우위는 재검증이 필요하다는 것 둘 다 정확히 구분해서 기록해야 한다.</div></li>
+      <li><div><b>N=7 골든셋은 여전히 파일럿 규모다.</b> 이번 hub 분석(N=2,160)과 규모를 맞춘 진짜 retrieval
+        품질 검증(사람 다중 라벨링 + 4개 collection 전부)이 다음 단계.</div></li>
+      <li><div><b>"청바지 79.3% messy" 같은 카테고리별 편차를 감지 임계값에 반영할지 검토.</b> 카테고리마다
+        전신샷 비율이 크게 달라, 단일 threshold가 최적이 아닐 수 있다.</div></li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <p class="eyebrow" style="margin-bottom:2px">Checklist</p>
+      <h2>실무라면 여기서 더 확인했을 것들</h2>
+    </div>
+    <ul class="check">
+      <li><div>실 서비스 쿼리(중고 사용자가 실제로 올리는 사진)와 카탈로그(전문 상품컷)의 도메인 갭 —
+        이번 분석은 카탈로그 사진을 쿼리로도 썼기 때문에, 실제 도메인 갭에서 오는 hub 효과는 미포함.</div></li>
+      <li><div>Hub 상품이 실제 클릭/전환에 미치는 영향 — 자주 뽑힌다고 해서 항상 나쁜 건 아닐 수 있음
+        (진짜 인기 스타일일 가능성도 배제 못함). 오프라인 지표만으로는 구분 불가.</div></li>
+      <li><div>Detection threshold(0.3/0.4/0.5)별로 messy 판정 비율이 얼마나 민감하게 바뀌는지.</div></li>
+      <li><div>카탈로그 규모가 커질 때(180장 → 수만 장) Gini 계수와 hub 개수가 어떻게 스케일되는지 —
+        지금 결과가 소규모 특유의 현상이 아님을 확인.</div></li>
+      <li><div>재현성 — 같은 모델을 다른 랜덤시드/배치 순서로 다시 돌려도 hub 목록이 안정적인지.</div></li>
+    </ul>
+  </section>
+
+  <footer>
+    방법론 전체와 알려진 한계는 <code>docs/evidence/milestone-10-hubness.md</code>에 기록.
+    이미지 출처: 별도 개인 프로젝트의 실제 무신사 크롤링 데이터(itda). 임베딩: Marqo/marqo-fashionSigLIP · Detection: yainage90/fashion-object-detection.
+    Gini 계수는 값이 낮을수록(0에 가까울수록) 검색 결과가 특정 상품에 편중되지 않고 고르게 분산됐다는 뜻.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  function barChart(containerId, data, opts){
+    opts = opts || {};
+    var el = document.getElementById(containerId);
+    if(!el) return;
+    var max = opts.max || Math.max.apply(null, data.map(function(d){return Array.isArray(d.value)?Math.max.apply(null,d.value):d.value;}));
+    data.forEach(function(d){
+      var row = document.createElement('div');
+      row.className = 'bar-row';
+      var label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = d.label;
+      row.appendChild(label);
+      var track = document.createElement('div');
+      track.className = 'bar-track';
+      if(Array.isArray(d.value)){
+        track.style.display = 'flex';
+        track.style.gap = '2px';
+        d.value.forEach(function(v, i){
+          var fill = document.createElement('div');
+          fill.className = 'bar-fill';
+          fill.style.width = (100*v/max/d.value.length) + '%';
+          fill.style.background = opts.colors[i];
+          track.appendChild(fill);
+        });
+      } else {
+        var fill = document.createElement('div');
+        fill.className = 'bar-fill';
+        fill.style.width = (100*d.value/max) + '%';
+        fill.style.background = opts.color || 'var(--accent)';
+        track.appendChild(fill);
+      }
+      row.appendChild(track);
+      var val = document.createElement('div');
+      val.className = 'val';
+      val.textContent = Array.isArray(d.value) ? d.value.join(' / ') : d.value;
+      row.appendChild(val);
+      el.appendChild(row);
+    });
+  }
+
+  barChart('chart-category', [
+    {label:'반팔', value:773}, {label:'니트', value:261}, {label:'긴팔', value:254},
+    {label:'맨투맨', value:249}, {label:'후드티', value:210}, {label:'셔츠', value:182},
+    {label:'청바지', value:164}, {label:'나시', value:57}
+  ], {color:'var(--accent)'});
+
+  barChart('chart-messy', [
+    {label:'청바지', value:79.3}, {label:'나시', value:38.6}, {label:'셔츠', value:31.3},
+    {label:'긴팔', value:29.5}, {label:'니트', value:27.2}, {label:'맨투맨', value:16.1},
+    {label:'반팔', value:14.9}, {label:'후드티', value:10.0}
+  ], {color:'var(--warn)', max:100});
+
+  barChart('chart-detcount', [
+    {label:'0개', value:127}, {label:'1개 (clean)', value:1497}, {label:'2개', value:306},
+    {label:'3개', value:93}, {label:'4개', value:112}, {label:'5개+', value:25}
+  ], {color:'var(--accent)'});
+
+  barChart('chart-labels', [
+    {label:'top', value:1757}, {label:'bottom', value:492}, {label:'shoes', value:302},
+    {label:'outer', value:195}, {label:'hat', value:92}, {label:'dress', value:81}, {label:'bag', value:46}
+  ], {color:'var(--accent)'});
+
+  var bins = ["0-1","2-3","4-5","6-7","8-9","10-11","12-13","14-15","16-19","20-29","30+"];
+  var rawHist = [321,351,279,255,173,140,121,103,116,172,129];
+  var bboxHist = [307,343,293,258,192,144,105,97,136,164,121];
+  barChart('chart-hubhist', bins.map(function(b,i){return {label:b, value:[rawHist[i], bboxHist[i]]};}),
+    {colors:['var(--raw)','var(--bbox)']});
+
+  var hubs = [
+    {tag:'raw', label:'RAW hub · 133회', cap:'박스 로고 티 화이트 — 반팔, 단일 감지', img:'/_blob/693cd25194d2df9a978f1b84e3577df5'},
+    {tag:'raw', label:'RAW hub · 132회', cap:'2010 Sports Hoodie Grey — 후드티, 단일 감지', img:'/_blob/5fab62be5bd76a4e3a838c0d3f156f36'},
+    {tag:'bbox', label:'BBox hub · 143회', cap:'X-Ray 그래픽 티셔츠 — 인물+바지 함께 찍혔지만 크롭 후에도 hub', img:'/_blob/c62e0f772a307603919226552dda70d9'},
+    {tag:'contrast', label:'다중 아이템 예시', cap:'가디건 2벌 + 인물 2명 — messy 썸네일의 전형', img:'/_blob/5710f7fbf9314d2200d38b68e9db3a2e'}
+  ];
+  var gallery = document.getElementById('hub-gallery');
+  hubs.forEach(function(h){
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = '<img src="'+h.img+'" alt="'+h.cap+'">' +
+      '<div class="body"><span class="tag '+h.tag+'">'+h.label+'</span><p class="cap">'+h.cap+'</p></div>';
+    gallery.appendChild(card);
+  });
+
+  document.getElementById('img-hub-example').src = '/_blob/693cd25194d2df9a978f1b84e3577df5';
+  document.getElementById('img-contrast-example').src = '/_blob/1966901969f5f9d2c8a1819bdeb909eb';
+})();
+</script>
