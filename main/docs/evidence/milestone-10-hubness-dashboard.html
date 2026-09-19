@@ -458,38 +458,42 @@ Normalize(...)</pre>
       <p class="section-sub">
         dress_skirts 데이터가 없다는 게 이 프로젝트 전체의 마지막 구멍이었다. 또 다른 개인 프로젝트에서
         원피스 25장/치마 14장을 찾았고, 그중 콜라주성 프로모션 배너(파일명에 옷 7개가 한꺼번에 나열된
-        것들)를 detection 개수로 자동 필터링해서 순수 단일 상품 사진 13장을 골라냈다.
+        것들)를 detection 개수로 자동 필터링해서 순수 단일 상품 사진 13장을 골라냈다. 이후 pants/outer
+        카탈로그가 한 하위 스타일(청바지 95%, 후드티 97%)에 쏠려있던 걸 발견해 하위 스타일별 균형
+        샘플링으로 다시 뽑고, 바뀐 후보 79개 중 62개를 새로 라벨링해 재검증까지 마쳤다.
       </p>
     </div>
 
     <div class="stat-row">
-      <div class="stat"><span class="n">N=11</span><span class="l">쿼리 (기존 7 + dress_skirts 4)</span></div>
-      <div class="stat"><span class="n">4/4</span><span class="l">카테고리 전부 커버</span></div>
-      <div class="stat" style="border-color:var(--accent); background:var(--accent-soft);"><span class="n" style="color:var(--accent)">PASS</span><span class="l">validate_golden_set() 최초 통과</span></div>
+      <div class="stat" style="border-color:var(--accent); background:var(--accent-soft);"><span class="n" style="color:var(--accent)">0.81</span><span class="l">NDCG@10 (1.0 = 완벽한 순위)</span></div>
+      <div class="stat"><span class="n">85%</span><span class="l">정답이 검색 결과 1위로 나온 비율 (MRR)</span></div>
+      <div class="stat"><span class="n">64%</span><span class="l">상위 5개 중 실제로 유관한 상품 비율</span></div>
     </div>
 
     <div class="panel">
-      <p class="chart-title">최종 E0-E4 (N=11, 4 collection, 결정적 재현)</p>
+      <p class="chart-title">최종 E0-E4 (N=11, 4 collection, 하위 스타일 균형 샘플링 재검증)</p>
       <table>
-        <thead><tr><th>실험</th><th>정책</th><th class="num">NDCG@10</th><th class="num">MRR</th><th class="num">Recall@10</th></tr></thead>
+        <thead><tr><th>실험</th><th>정책</th><th class="num">NDCG@10</th><th class="num">MRR</th><th class="num">Precision@5</th></tr></thead>
         <tbody>
-          <tr class="best"><td>E0</td><td>RAW</td><td class="num">0.735</td><td class="num">0.828</td><td class="num">0.883</td></tr>
-          <tr><td>E1</td><td>highest_confidence</td><td class="num">0.608</td><td class="num">0.746</td><td class="num">0.671</td></tr>
-          <tr><td>E2</td><td>largest</td><td class="num">0.598</td><td class="num">0.746</td><td class="num">0.671</td></tr>
-          <tr><td>E3</td><td>category_confidence</td><td class="num">0.659</td><td class="num">0.791</td><td class="num">0.762</td></tr>
-          <tr><td>E4</td><td>category_largest</td><td class="num">0.659</td><td class="num">0.791</td><td class="num">0.762</td></tr>
+          <tr class="best"><td>E0</td><td>RAW</td><td class="num">0.812</td><td class="num">0.848</td><td class="num">0.636</td></tr>
+          <tr><td>E1</td><td>highest_confidence</td><td class="num">0.636</td><td class="num">0.697</td><td class="num">0.509</td></tr>
+          <tr><td>E2</td><td>largest</td><td class="num">0.636</td><td class="num">0.697</td><td class="num">0.509</td></tr>
+          <tr><td>E3</td><td>category_confidence</td><td class="num">0.650</td><td class="num">0.697</td><td class="num">0.527</td></tr>
+          <tr><td>E4</td><td>category_largest</td><td class="num">0.650</td><td class="num">0.697</td><td class="num">0.527</td></tr>
         </tbody>
       </table>
-      <p class="cap" style="margin-top:10px;">RAW가 N=7 때보다 더 큰 격차로 1위 유지 (0.735 vs 0.659).
-        <b>ADR-001: RAW로 최종 결정</b> — 처음으로 "provisional"이 아닌 "Decided".</p>
+      <p class="cap" style="margin-top:10px;">카탈로그 편중을 없애자 RAW의 우위가 오히려 더 커졌다 (NDCG 0.735→0.812,
+        재편중 전 대비). <b>ADR-001: RAW로 최종 결정</b> — 매 지표에서 모든 bbox 정책을 이김.</p>
     </div>
 
     <div class="finding">
-      <b>다만 카테고리별로 뜯어보면 얘기가 다르다.</b> <code>top</code>에서는 category-aware bbox가
-      RAW 수준까지 회복(0.799 vs RAW 0.785)하지만, <code>outer</code>에서는 전혀 회복 못 함(0.396,
-      RAW는 0.754). <code>pants</code>는 모든 정책에서 유독 낮음(0.25~0.31) — bbox 문제가 아니라
-      카탈로그 매칭 자체의 문제로 보이며 별도 조사가 필요하다. 숫자를 뭉개서 "RAW가 이겼다"로만
-      끝내지 않고 이 편차를 그대로 기록해뒀다.
+      <b>카테고리별로 뜯어보면 얘기가 더 재밌다.</b> <code>pants</code>는 카탈로그를 다시 균형 잡자
+      다크워시 청바지 쿼리(Q001)가 NDCG <b>1.0(완벽)</b>으로 뛰었다 — "pants가 원래 약하다"던 이전 결론은
+      사실 카탈로그가 청바지 95%로 쏠려 진짜 유사 상품이 순위 25~47위 밖으로 밀려난 샘플링 문제였다.
+      다만 화이트 와이드 데님 쿼리(Q002)는 카탈로그 안에 유사 상품이 <b>0개</b>라는 진짜 커버리지 공백도
+      같이 드러났다 — 숫자를 좋게만 보이려고 빼지 않고 그대로 포함했다. <code>outer</code>는 남은 가디건을
+      전부(3/3) 넣어도 category-aware bbox가 여전히 회복하지 못했다(0.541, RAW는 0.877) — "가디건이 부족해서"
+      라는 가설은 이번에 기각됐고, 진짜 원인은 아직 미해결로 남겨뒀다.
     </div>
   </section>
 
