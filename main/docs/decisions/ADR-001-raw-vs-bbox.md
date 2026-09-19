@@ -3,22 +3,28 @@
 ## Status
 
 **Decided: RAW.** Confirmed on a spec-compliant golden set (N=11, all 4 collections, passes
-`evaluation.golden_set.validate_golden_set()`) with a real, deterministic, reproducible pipeline
-— see `docs/evidence/milestone-10-final-decision.md`. `docs/decisions/final_config.yaml`'s
+`evaluation.golden_set.validate_golden_set()`) with a real, deterministic, reproducible pipeline,
+on a catalog rebalanced to remove a sub-style sampling skew — see
+`docs/evidence/milestone-10-catalog-rebalance.md` (current numbers: **NDCG@10 0.812**, MRR 0.848,
+Precision@5 0.636, all beating every BBox policy). `docs/decisions/final_config.yaml`'s
 `preprocessing` field is set to `raw`.
 
-This decision took two corrections to reach:
+This decision took three corrections to reach:
 1. The original N=7 pilot (see "Pilot Evidence" below) found category-aware BBox (E3) winning —
    computed with a real embedding-pipeline bug present (`retrieval/models.py` used a random-crop
    training transform instead of the deterministic validation one; see
    `docs/evidence/milestone-10-transform-bug.md`).
 2. The bug-fixed re-run on the same N=7 set reversed that to RAW.
-3. This document's own expansion — a spec-compliant N=11 set across all 4 collections — confirmed
-   RAW by an even wider margin (0.735 vs. 0.659 NDCG@10), not just a bug-fix artifact.
+3. The N=11, 4-collection expansion (`milestone-10-final-decision.md`) confirmed RAW by a wider
+   margin (0.735 vs. 0.659 NDCG@10) — then its own per-category breakdown revealed the `pants`/
+   `outer` catalogs were built from a skewed random sample (95%/97% dominated by one sub-style).
+4. `docs/evidence/milestone-10-catalog-rebalance.md` resampled the catalog with a per-sub-style
+   quota and relabeled the affected pooled candidates, widening RAW's lead further still
+   (0.812 vs. 0.650 NDCG@10) — the strongest and cleanest evidence for this ADR to date.
 
-Both the original (buggy) Pilot Evidence and the corrected re-run are kept below/linked as the
-historical record of what was found and when; `milestone-10-final-decision.md` is the current,
-decision-grade evidence.
+The original (buggy) Pilot Evidence, the N=7 bug-fixed re-run, and the N=11 pre-rebalance numbers
+are all kept below/linked as the historical record of what was found and when;
+`milestone-10-catalog-rebalance.md` is the current, decision-grade evidence.
 
 ## Context
 

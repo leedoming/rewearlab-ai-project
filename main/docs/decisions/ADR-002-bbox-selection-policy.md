@@ -4,22 +4,24 @@
 
 **Decided, but moot: ADR-001 resolves RAW vs. BBox in favor of RAW.** This ADR's own question
 (*which* bbox policy, if BBox is used) is answered — `category_confidence`/`category_largest`
-(E3/E4, tied with each other) beat the category-agnostic policies on the spec-compliant N=11,
-4-collection golden set (`docs/evidence/milestone-10-final-decision.md`), confirming what the
-N=7 pilot (both before and after the transform-bug fix) already showed. But since ADR-001 now
-recommends RAW outright, this ADR's practical relevance is conditional on some future decision
-revisiting RAW vs. BBox — `final_config.yaml`'s `bbox_policy` field stays `TBD` for that reason,
-not for lack of evidence about which policy would win.
+(E3/E4, tied with each other, NDCG@10 0.650) beat the category-agnostic policies (E1/E2, 0.636) on
+the current, rebalanced-catalog N=11 golden set
+(`docs/evidence/milestone-10-catalog-rebalance.md`), confirming what every earlier round (N=7
+pilot before and after the transform-bug fix, N=11 pre-rebalance) already showed. But since
+ADR-001 recommends RAW outright, this ADR's practical relevance is conditional on some future
+decision revisiting RAW vs. BBox — `final_config.yaml`'s `bbox_policy` field stays `TBD` for that
+reason, not for lack of evidence about which policy would win.
 
-One nuance the expanded set surfaced that the N=7 pilot couldn't: **category-aware bbox recovers
-RAW-level NDCG for `top` (0.799 vs RAW's 0.785) but not for `outer` (0.396, same as the
-category-agnostic policies, vs RAW's 0.754)** — based on only 2 `outer` queries, not enough to
-conclude the mechanism fails for that category, but enough to flag rather than paper over. A
-likely contributing factor, found while auditing catalog composition across all four collections
-(`docs/evidence/milestone-10-final-decision.md` section 5.2): the sampled 60-item `outer` catalog
-is 97% hoodie / 3% cardigan (source `itda` crawl only had 4 cardigan photos total), so the
-cardigan query (Q006) searches a catalog where its own style is almost absent — on top of, not
-instead of, the plain small-N noise explanation.
+One nuance first surfaced on the N=11 pre-rebalance set and **retested, not just repeated, after
+the catalog rebalance**: **category-aware bbox recovers RAW-level NDCG for `top` (0.812 vs RAW's
+0.800) but not for `outer` (0.541, same as the category-agnostic policies, vs RAW's 0.877)**.
+The pre-rebalance hypothesis was that `outer`'s failure was explained by cardigan scarcity (the
+sampled catalog had only 2 cardigans out of 60). `milestone-10-catalog-rebalance.md` rebuilt the
+catalog with every available cardigan included (3 of 3, the maximum the real source data has) and
+`outer` *still* failed to recover under category-aware bbox — **that specific explanation is now
+retracted**, not confirmed. The failure is real and reproducible across two independently-built
+catalogs, but its root cause remains open (still only 2 `outer` queries, so plain small-N noise
+also hasn't been ruled out).
 
 ## Context
 

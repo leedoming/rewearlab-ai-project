@@ -111,20 +111,68 @@ QUERY_SPECS = [
 BBOX_POLICIES = ["highest_confidence", "largest", "category_confidence", "category_largest"]
 
 
+def _stratified_quota(sizes, cap):
+    """Max-min-fair allocation of `cap` slots across sub-style groups whose
+    available sizes are `sizes` (dict of key -> available count).
+
+    Found (docs/evidence/milestone-10-final-decision.md section 5.2) that the
+    original flat `shuffle-then-cap-to-60` sampling let a collection's rarest
+    sub-style (e.g. 4 cardigan photos against 210 hoodies) collapse to a
+    handful of items in the sampled catalog. This instead gives every
+    sub-style an equal share of the cap, and only when a sub-style has fewer
+    images than its equal share does the leftover roll over to the other
+    sub-styles (proportionally to their own remaining room) -- so small
+    sub-styles are never starved by a group that could easily spare slots,
+    but a sub-style still can't be allocated more images than actually exist.
+    """
+    remaining_cap = cap
+    allocated = {key: 0 for key in sizes}
+    active = {key for key, n in sizes.items() if n > 0}
+    while remaining_cap > 0 and active:
+        share = max(1, remaining_cap // len(active))
+        progressed = False
+        for key in sorted(active):
+            if remaining_cap <= 0:
+                break
+            avail = sizes[key] - allocated[key]
+            take = min(share, avail, remaining_cap)
+            if take > 0:
+                allocated[key] += take
+                remaining_cap -= take
+                progressed = True
+            if allocated[key] >= sizes[key]:
+                active.discard(key)
+        if not progressed:
+            break
+    return allocated
+
+
 def gather_catalog_paths(exclude_paths):
     exclude = {str(p.resolve()) for p in exclude_paths}
-    by_collection = {name: [] for name in COLLECTION_NAMES}
+    # Group by (collection, source folder) first, not just collection, so
+    # each sub-style can be sampled from independently below.
+    by_collection_folder = {}
     for folder, collection in FOLDER_TO_COLLECTION.items():
         is_dress_skirts_source = folder.parent == ITDA_FASHION_DETECT_ROOT
+        paths = []
         for path in sorted(folder.iterdir()):
             if not path.is_file() or str(path.resolve()) in exclude:
                 continue
             if is_dress_skirts_source and path.name not in DRESS_SKIRT_ALLOWLIST:
                 continue
-            by_collection[collection].append(path)
-    for collection in by_collection:
-        random.Random(RANDOM_SEED).shuffle(by_collection[collection])
-    return {c: paths[:MAX_CATALOG_PER_COLLECTION] for c, paths in by_collection.items() if paths}
+            paths.append(path)
+        random.Random(RANDOM_SEED).shuffle(paths)
+        by_collection_folder.setdefault(collection, {})[folder] = paths
+
+    result = {}
+    for collection, folder_paths in by_collection_folder.items():
+        sizes = {folder: len(paths) for folder, paths in folder_paths.items()}
+        quota = _stratified_quota(sizes, MAX_CATALOG_PER_COLLECTION)
+        sampled = [path for folder, paths in folder_paths.items() for path in paths[: quota[folder]]]
+        if sampled:
+            random.Random(RANDOM_SEED).shuffle(sampled)
+            result[collection] = sampled
+    return result
 
 
 def build_catalog(client, catalog_paths, detection_cache, image_processor, det_model, det_device, embed_model, preprocess_fn, embed_device):

@@ -3,106 +3,342 @@
   "pooled_ground_truth": true,
   "queries": {
     "Q001": [
-      {"product_id": "pants-0034", "relevance": 1},
-      {"product_id": "pants-0006", "relevance": 1},
-      {"product_id": "pants-0040", "relevance": 1},
-      {"product_id": "pants-0035", "relevance": 1},
-      {"product_id": "pants-0025", "relevance": 1},
-      {"product_id": "pants-0050", "relevance": 1},
-      {"product_id": "pants-0012", "relevance": 2},
-      {"product_id": "pants-0011", "relevance": 2},
-      {"product_id": "pants-0031", "relevance": 1},
-      {"product_id": "pants-0007", "relevance": 2},
-      {"product_id": "pants-0041", "relevance": 1},
-      {"product_id": "pants-0019", "relevance": 1}
+      {
+        "product_id": "pants-0040",
+        "relevance": 1
+      },
+      {
+        "product_id": "pants-0052",
+        "relevance": 1
+      },
+      {
+        "product_id": "pants-0056",
+        "relevance": 1
+      },
+      {
+        "product_id": "pants-0049",
+        "relevance": 1
+      },
+      {
+        "product_id": "pants-0002",
+        "relevance": 1
+      },
+      {
+        "product_id": "top-0038",
+        "relevance": 0
+      },
+      {
+        "product_id": "outer-0054",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0029",
+        "relevance": 0
+      },
+      {
+        "product_id": "outer-0007",
+        "relevance": 0
+      },
+      {
+        "product_id": "dress_skirts-0004",
+        "relevance": 0
+      },
+      {
+        "product_id": "outer-0051",
+        "relevance": 0
+      },
+      {
+        "product_id": "outer-0006",
+        "relevance": 0
+      }
     ],
     "Q002": [
-      {"product_id": "pants-0001", "relevance": 0},
-      {"product_id": "pants-0014", "relevance": 1},
-      {"product_id": "pants-0034", "relevance": 0},
-      {"product_id": "pants-0051", "relevance": 1},
-      {"product_id": "pants-0040", "relevance": 0},
-      {"product_id": "pants-0022", "relevance": 2},
-      {"product_id": "pants-0048", "relevance": 0},
-      {"product_id": "pants-0031", "relevance": 0},
-      {"product_id": "pants-0002", "relevance": 0}
+      {
+        "product_id": "top-0041",
+        "relevance": 0
+      },
+      {
+        "product_id": "outer-0037",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0001",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0009",
+        "relevance": 0
+      },
+      {
+        "product_id": "outer-0051",
+        "relevance": 0
+      },
+      {
+        "product_id": "outer-0057",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0035",
+        "relevance": 0
+      }
     ],
     "Q003": [
-      {"product_id": "top-0034", "relevance": 2},
-      {"product_id": "outer-0019", "relevance": 1},
-      {"product_id": "outer-0038", "relevance": 0},
-      {"product_id": "pants-0022", "relevance": 0},
-      {"product_id": "pants-0053", "relevance": 0},
-      {"product_id": "pants-0034", "relevance": 0},
-      {"product_id": "pants-0051", "relevance": 0},
-      {"product_id": "pants-0046", "relevance": 0},
-      {"product_id": "pants-0043", "relevance": 0},
-      {"product_id": "pants-0031", "relevance": 0},
-      {"product_id": "pants-0037", "relevance": 0}
+      {
+        "product_id": "top-0040",
+        "relevance": 1
+      },
+      {
+        "product_id": "top-0047",
+        "relevance": 1
+      },
+      {
+        "product_id": "outer-0003",
+        "relevance": 1
+      },
+      {
+        "product_id": "top-0034",
+        "relevance": 1
+      },
+      {
+        "product_id": "top-0012",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0038",
+        "relevance": 1
+      },
+      {
+        "product_id": "dress_skirts-0004",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0044",
+        "relevance": 0
+      }
     ],
     "Q004": [
-      {"product_id": "top-0021", "relevance": 2},
-      {"product_id": "top-0054", "relevance": 1},
-      {"product_id": "top-0016", "relevance": 1},
-      {"product_id": "top-0009", "relevance": 1},
-      {"product_id": "top-0051", "relevance": 1},
-      {"product_id": "top-0037", "relevance": 1},
-      {"product_id": "top-0048", "relevance": 0}
+      {
+        "product_id": "top-0027",
+        "relevance": 1
+      },
+      {
+        "product_id": "top-0010",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0055",
+        "relevance": 1
+      },
+      {
+        "product_id": "outer-0057",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0030",
+        "relevance": 1
+      },
+      {
+        "product_id": "top-0039",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0036",
+        "relevance": 0
+      }
     ],
     "Q005": [
-      {"product_id": "top-0003", "relevance": 1},
-      {"product_id": "top-0016", "relevance": 0},
-      {"product_id": "top-0048", "relevance": 1},
-      {"product_id": "top-0053", "relevance": 1},
-      {"product_id": "top-0021", "relevance": 0},
-      {"product_id": "top-0012", "relevance": 2}
+      {
+        "product_id": "top-0027",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0055",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0036",
+        "relevance": 1
+      },
+      {
+        "product_id": "top-0054",
+        "relevance": 1
+      },
+      {
+        "product_id": "top-0003",
+        "relevance": 1
+      },
+      {
+        "product_id": "top-0020",
+        "relevance": 1
+      }
     ],
     "Q006": [
-      {"product_id": "top-0046", "relevance": 0},
-      {"product_id": "top-0043", "relevance": 1},
-      {"product_id": "top-0006", "relevance": 0},
-      {"product_id": "top-0034", "relevance": 1},
-      {"product_id": "outer-0019", "relevance": 1},
-      {"product_id": "pants-0005", "relevance": 0},
-      {"product_id": "pants-0023", "relevance": 0},
-      {"product_id": "pants-0050", "relevance": 0},
-      {"product_id": "pants-0055", "relevance": 0},
-      {"product_id": "pants-0007", "relevance": 0}
+      {
+        "product_id": "outer-0037",
+        "relevance": 2
+      },
+      {
+        "product_id": "top-0040",
+        "relevance": 1
+      },
+      {
+        "product_id": "top-0054",
+        "relevance": 0
+      },
+      {
+        "product_id": "outer-0006",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0034",
+        "relevance": 0
+      },
+      {
+        "product_id": "outer-0054",
+        "relevance": 0
+      },
+      {
+        "product_id": "outer-0007",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0038",
+        "relevance": 1
+      },
+      {
+        "product_id": "top-0029",
+        "relevance": 0
+      },
+      {
+        "product_id": "dress_skirts-0003",
+        "relevance": 0
+      }
     ],
     "Q007": [
-      {"product_id": "outer-0010", "relevance": 1},
-      {"product_id": "outer-0013", "relevance": 1},
-      {"product_id": "outer-0032", "relevance": 2},
-      {"product_id": "outer-0020", "relevance": 2},
-      {"product_id": "outer-0006", "relevance": 1}
+      {
+        "product_id": "outer-0034",
+        "relevance": 1
+      },
+      {
+        "product_id": "outer-0008",
+        "relevance": 1
+      },
+      {
+        "product_id": "outer-0051",
+        "relevance": 2
+      },
+      {
+        "product_id": "outer-0010",
+        "relevance": 2
+      },
+      {
+        "product_id": "outer-0050",
+        "relevance": 1
+      },
+      {
+        "product_id": "outer-0059",
+        "relevance": 0
+      },
+      {
+        "product_id": "outer-0004",
+        "relevance": 1
+      },
+      {
+        "product_id": "outer-0002",
+        "relevance": 1
+      }
     ],
     "Q008": [
-      {"product_id": "dress_skirts-0004", "relevance": 2},
-      {"product_id": "dress_skirts-0000", "relevance": 1},
-      {"product_id": "dress_skirts-0006", "relevance": 1},
-      {"product_id": "dress_skirts-0003", "relevance": 2},
-      {"product_id": "top-0034", "relevance": 0}
+      {
+        "product_id": "dress_skirts-0007",
+        "relevance": 2
+      },
+      {
+        "product_id": "dress_skirts-0002",
+        "relevance": 1
+      },
+      {
+        "product_id": "dress_skirts-0006",
+        "relevance": 1
+      },
+      {
+        "product_id": "dress_skirts-0005",
+        "relevance": 2
+      },
+      {
+        "product_id": "dress_skirts-0001",
+        "relevance": 0
+      }
     ],
     "Q009": [
-      {"product_id": "dress_skirts-0008", "relevance": 2},
-      {"product_id": "dress_skirts-0007", "relevance": 1},
-      {"product_id": "dress_skirts-0005", "relevance": 1},
-      {"product_id": "pants-0007", "relevance": 0},
-      {"product_id": "pants-0008", "relevance": 0}
+      {
+        "product_id": "dress_skirts-0008",
+        "relevance": 2
+      },
+      {
+        "product_id": "dress_skirts-0004",
+        "relevance": 1
+      },
+      {
+        "product_id": "dress_skirts-0003",
+        "relevance": 1
+      },
+      {
+        "product_id": "top-0033",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0047",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0038",
+        "relevance": 0
+      }
     ],
     "Q010": [
-      {"product_id": "dress_skirts-0005", "relevance": 1},
-      {"product_id": "pants-0048", "relevance": 0},
-      {"product_id": "dress_skirts-0007", "relevance": 2},
-      {"product_id": "pants-0042", "relevance": 0},
-      {"product_id": "pants-0001", "relevance": 0}
+      {
+        "product_id": "dress_skirts-0003",
+        "relevance": 1
+      },
+      {
+        "product_id": "dress_skirts-0004",
+        "relevance": 2
+      },
+      {
+        "product_id": "top-0033",
+        "relevance": 0
+      },
+      {
+        "product_id": "outer-0006",
+        "relevance": 0
+      },
+      {
+        "product_id": "dress_skirts-0001",
+        "relevance": 1
+      }
     ],
     "Q011": [
-      {"product_id": "dress_skirts-0006", "relevance": 1},
-      {"product_id": "dress_skirts-0001", "relevance": 1},
-      {"product_id": "dress_skirts-0000", "relevance": 0},
-      {"product_id": "top-0013", "relevance": 0},
-      {"product_id": "top-0022", "relevance": 0}
+      {
+        "product_id": "dress_skirts-0006",
+        "relevance": 1
+      },
+      {
+        "product_id": "dress_skirts-0001",
+        "relevance": 1
+      },
+      {
+        "product_id": "dress_skirts-0002",
+        "relevance": 0
+      },
+      {
+        "product_id": "top-0024",
+        "relevance": 1
+      },
+      {
+        "product_id": "top-0009",
+        "relevance": 1
+      }
     ]
   }
 }

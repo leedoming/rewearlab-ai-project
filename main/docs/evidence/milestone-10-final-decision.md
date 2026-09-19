@@ -1,5 +1,13 @@
 # Milestone 10 Final Decision — Expanded Golden Set (N=11, 4 Collections): Evidence Record
 
+> ⚠️ **Superseded numbers.** Section 5.2 below found `pants`/`outer` catalogs were built from a
+> flat random sample that let a rare sub-style (4 cardigan photos, 5 non-jeans pants photos)
+> collapse to near-zero representation. `docs/evidence/milestone-10-catalog-rebalance.md`
+> resamples the catalog with a per-sub-style quota, relabels the pooled candidates that changed,
+> and re-runs E0-E4. The RAW-vs-BBox conclusion is unchanged and strengthened, but the exact
+> NDCG/precision/recall numbers below are stale — use the rebalance doc's numbers for anything
+> customer-facing.
+
 **Branch:** `feat/m10-final-decision-regression`
 **Repository:** fork `leedoming/rewearlab-ai-project` (upstream: `GeeYun086/rewearlab-ai-project`)
 **Supersedes:** the E0-E4 numbers in `milestone-10-transform-bug.md` section 3.1 (N=7, 3

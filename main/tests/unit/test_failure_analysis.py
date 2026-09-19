@@ -75,6 +75,16 @@ def test_classify_failure_raw_mode_never_reports_detection_or_bbox_failure():
     assert classify_failure(preprocessing, {"relevant_exclusion_rate": 0.0}) == "embedding_similarity_failure"
 
 
+def test_classify_failure_treats_none_exclusion_rate_as_zero():
+    # relevant_exclusion_rate is None (not 0.0) when a query has zero relevant
+    # items at all -- metrics.relevant_exclusion_rate's documented "nothing to
+    # reason about" convention. classify_failure must not crash comparing
+    # None > 0.0; a query with no relevant items to exclude in the first
+    # place cannot have suffered a filter_exclusion_failure.
+    preprocessing = {"mode": "raw", "selected_bbox": None, "fallback_used": False, "fallback_reason": None}
+    assert classify_failure(preprocessing, {"relevant_exclusion_rate": None}) == "embedding_similarity_failure"
+
+
 def test_classify_failure_filter_exclusion_failure_when_real_exclusion_happened():
     preprocessing = {"mode": "bbox", "fallback_used": False, "fallback_reason": None}
     assert (

@@ -94,7 +94,7 @@ def classify_failure(preprocessing, metrics, database_coverage_failure=False):
         if preprocessing.get("fallback_reason") == "no_detections":
             return "detection_failure"
         return "bbox_selection_failure"
-    if metrics.get("relevant_exclusion_rate", 0.0) > 0.0:
+    if (metrics.get("relevant_exclusion_rate") or 0.0) > 0.0:
         return "filter_exclusion_failure"
     if database_coverage_failure:
         return "database_coverage_failure"
