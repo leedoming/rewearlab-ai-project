@@ -4,6 +4,8 @@ Detection (`retrieval.detection.detect_fashion_items`) and selection are
 kept as separate responsibilities per IMPLEMENTATION_SPEC.md section 6.
 """
 
+from PIL import Image
+
 from .category import get_allowed_labels
 from .config import (
     BBOX_SELECTION_POLICIES,
@@ -89,6 +91,32 @@ def crop_image(image, bbox, padding_ratio=0.0):
     x1, y1 = max(0, int(x1)), max(0, int(y1))
     x2, y2 = min(width, int(x2)), min(height, int(y2))
     return image.crop((x1, y1, x2, y2))
+
+
+def letterbox_to_square(image, fill=(128, 128, 128)):
+    """Pad `image` to a square canvas, centered, preserving its aspect ratio.
+
+    The embedding model's own preprocessing (`open_clip`'s val transform)
+    does a bare `Resize((224, 224))` with no aspect-ratio handling -- a
+    non-square crop gets unevenly stretched to fit the square. This is
+    proportionally much worse for a tall, narrow bbox crop (e.g. a
+    full-length pants crop, aspect ratio ~0.37) than for a roughly
+    portrait-shaped raw photo (~0.83): see
+    docs/evidence/milestone-10-letterbox.md for the investigation this
+    came from. Padding to square first means the model's resize only
+    scales, never distorts.
+
+    `fill` defaults to a neutral mid-gray (matching common object-crop
+    letterboxing practice, e.g. YOLO's own preprocessing) rather than
+    white or black, so it doesn't bias the padded region toward either a
+    light or dark product-photo background.
+    """
+    width, height = image.size
+    side = max(width, height)
+    canvas = Image.new(image.mode if image.mode in ("RGB", "L") else "RGB", (side, side), fill)
+    offset = ((side - width) // 2, (side - height) // 2)
+    canvas.paste(image, offset)
+    return canvas
 
 
 def _bbox_metadata(selected, padding_ratio, fallback_used, fallback_reason):
