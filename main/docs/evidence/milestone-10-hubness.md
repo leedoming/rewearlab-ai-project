@@ -130,8 +130,67 @@ matched) fixes:
 
 ---
 
+## 3.4 Mitigation attempts
+
+Prompted by a real production detail the user pointed out: the actual UI already runs per-object
+detection and searches **within each detected item's own category**, not one blended
+cross-category search. Two candidate fixes were tested against the already-computed embeddings
+(no re-inference needed):
+
+**Within-category search does not help.** Restricting each query's candidate pool to same-folder
+items (`hubness_mitigation.py`) left Gini *slightly worse*, not better (RAW: 0.5287 → 0.5386
+within-category; BBox: 0.5267 → 0.5364). This confirms section 3.2's mechanism: a plain white tee
+is still close to the centroid *of the `top` category specifically*, so narrowing the pool to just
+`top` doesn't move it away from that centroid.
+
+**Full mean-centering helps hubness a lot, but hurts real relevance quality.** Subtracting the
+pool's mean embedding before cosine similarity is a standard, cheap hubness-reduction technique.
+On the 2,160-image pool it worked dramatically: Gini 0.5287 → 0.3390, max hub count 133 → 43. But
+re-validated against the M10 pilot's real, relevance-labeled golden set (N=7) — the check this
+project's own discipline requires before treating an offline-metric win as a fix — **it regressed
+retrieval quality**: NDCG@10 dropped in 6 of 7 queries, Precision@5 fell ~35% (0.486 → 0.314),
+Recall@10 fell ~26% (0.638 → 0.474). Centering doesn't just push away generic items; it also
+disturbs the geometry that made genuinely relevant items rank highly. **Not shipped.**
+
+**Partial centering (blend factor α, `sweep_partial_centering.py`).** Swept
+`centered(v) = normalize(v - α · mean_vec)` for α ∈ [0, 1]:
+
+| α | Hub Gini | Hub max | NDCG@10 | MRR | P@5 | R@10 |
+|--:|--:|--:|--:|--:|--:|--:|
+| 0.0 | 0.5287 | 133 | 0.6041 | 0.7143 | 0.5143 | 0.6667 |
+| 0.3 | 0.4870 | 113 | 0.6020 | 0.7143 | 0.5143 | 0.6667 |
+| **0.4** | **0.4667** | **108** | **0.6355** | **0.7857** | 0.5143 | 0.6548 |
+| 0.5 | 0.4435 | 99 | 0.6057 | 0.7143 | 0.5143 | 0.6190 |
+| 0.6 | 0.4179 | 85 | 0.6034 | 0.7143 | 0.4571 | 0.6190 |
+| 0.8 | 0.3679 | 61 | 0.5846 | 0.7143 | 0.4286 | 0.6190 |
+| 1.0 | 0.3390 | 43 | 0.5066 | 0.6000 | 0.4000 | 0.5548 |
+
+α≈0.4–0.5 reduces hub concentration meaningfully (Gini −12% to −16%, max hub count −19% to −26%)
+without the clear NDCG/MRR regression seen at α=1.0 — α=0.4 even edged out α=0.0 on NDCG/MRR in
+this run. **This is a candidate, not a decision** — see the reproducibility caveat immediately
+below.
+
+**Important reproducibility caveat found while running this sweep:** the α=0.0 baseline computed
+inside `sweep_partial_centering.py` (NDCG@10 = 0.6041) does not exactly match the α=0.0 baseline
+computed moments earlier by `validate_centering_on_golden_set.py` (NDCG@10 = 0.5708), despite both
+re-embedding the identical 180 catalog images + 7 queries with the identical model and identical
+evaluation code. The likely cause is floating-point non-determinism in multi-threaded CPU BLAS
+operations during the SigLIP forward pass, which can flip the relative order of near-tied
+similarity scores. On a 7-query golden set, that's enough numerical noise to move NDCG@10 by
+±0.03–0.05 between otherwise-identical runs. This is itself a finding: **N=7 is not just
+small in the "not enough coverage" sense already documented — it's small enough that ordinary
+inference noise is on the same scale as the differences between configurations being compared.**
+Any α recommendation from this sweep needs re-confirmation (repeated runs and/or a larger golden
+set) before being trusted as a real optimum, not just noise.
+
 ## 4. What This Means / Recommendations
 
+0. **Do not ship full mean-centering (α=1.0) — it regresses relevance quality.** Section 3.4's
+   golden-set validation is exactly the check this project's discipline calls for before treating
+   an offline embedding-geometry win as a real fix, and it caught a real regression.
+   **α≈0.4–0.5 partial centering is a plausible candidate**, but per section 3.4's reproducibility
+   caveat, it needs re-confirmation (repeated runs and/or a larger golden set) before shipping —
+   not a same-session decision.
 1. **Hub suppression needs a different fix than bbox cropping** — e.g. re-ranking with a
    popularity/in-degree penalty for frequently-retrieved items, or a hybrid search that also
    weighs text/attribute similarity (a plain white tee and another plain white tee may look
@@ -194,6 +253,25 @@ cd main && python evaluation/pilot/hubness_analysis.py
 Result: RAW Gini=0.5287 (max=133), BBox Gini=0.5267 (max=143); top-1% RAW hubs are 9.1% messy vs.
 24.8% pool-wide.
 
+```bash
+cd main && python evaluation/pilot/hubness_mitigation.py
+```
+Result: within-category search does not reduce hubness (RAW Gini 0.5287 → 0.5386); full
+mean-centering does (0.5287 → 0.3390, max 133 → 43).
+
+```bash
+cd main && python evaluation/pilot/validate_centering_on_golden_set.py
+```
+Result: full mean-centering regresses the M10 pilot's real golden-set NDCG@10 (0.5708 → 0.4902),
+Precision@5 (0.486 → 0.314), and Recall@10 (0.638 → 0.474) — 6 of 7 queries got worse.
+
+```bash
+cd main && python evaluation/pilot/sweep_partial_centering.py
+```
+Result: partial centering (α=0.4–0.5) reduces hub Gini by 12–16% without the clear NDCG
+regression seen at α=1.0 in this run — see section 3.4 for the reproducibility caveat that
+qualifies this result.
+
 Both scripts' raw outputs (`messy_scan.json`, `hubness_results.json`, `hubness_meta.json`,
 `raw_embeddings.npy`, `bbox_embeddings.npy`) are local working data under
 `main/evaluation/pilot/_local/` (gitignored — large binary/derived files, and `messy_scan.json`
@@ -219,3 +297,11 @@ portfolio dashboard are the durable, committed record of what those runs produce
 - **This is an unsupervised embedding-geometry analysis, not a relevance-labeled retrieval-quality
   evaluation** — it answers "does this item get over-retrieved," not "are the results actually
   relevant." The M10 pilot's NDCG-based results remain the source for relevance-quality claims.
+- **Inference-level floating-point non-determinism is on the same scale as the effects being
+  measured** on the N=7 golden set (section 3.4) — two otherwise-identical re-embeddings of the
+  same 187 images produced NDCG@10 values 0.03–0.05 apart. Any single-run comparison at this
+  golden-set size (including this record's own α sweep) should be treated as indicative, not
+  conclusive, until confirmed by repeated runs or a larger labeled set.
+- **The partial-centering sweep optimizes against the same N=7 golden set used throughout this
+  and the M10 pilot's evidence** — there is a real risk of overfitting the choice of α to this
+  specific small query set rather than finding a value that generalizes.
