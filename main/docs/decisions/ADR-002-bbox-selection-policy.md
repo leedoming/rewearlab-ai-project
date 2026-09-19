@@ -14,7 +14,12 @@ not for lack of evidence about which policy would win.
 One nuance the expanded set surfaced that the N=7 pilot couldn't: **category-aware bbox recovers
 RAW-level NDCG for `top` (0.799 vs RAW's 0.785) but not for `outer` (0.396, same as the
 category-agnostic policies, vs RAW's 0.754)** — based on only 2 `outer` queries, not enough to
-conclude the mechanism fails for that category, but enough to flag rather than paper over.
+conclude the mechanism fails for that category, but enough to flag rather than paper over. A
+likely contributing factor, found while auditing catalog composition across all four collections
+(`docs/evidence/milestone-10-final-decision.md` section 5.2): the sampled 60-item `outer` catalog
+is 97% hoodie / 3% cardigan (source `itda` crawl only had 4 cardigan photos total), so the
+cardigan query (Q006) searches a catalog where its own style is almost absent — on top of, not
+instead of, the plain small-N noise explanation.
 
 ## Context
 

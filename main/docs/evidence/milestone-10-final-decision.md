@@ -121,11 +121,11 @@ saved top-10:
 | Q002 | pants-0001 | 0 | 3 |
 
 Every relevance=2 (near-duplicate) item is buried past rank 25, while relevance=0/1 items occupy
-the top ranks. This lines up with a real, structural cause in the catalog itself:
+the top ranks. This lines up with a real, structural cause in the catalog itself, audited in full in 5.2 below:
 `FOLDER_TO_COLLECTION` maps *two* source folders to the single `pants` collection —
-`musinsa_pants_1000/청바지` (jeans, 164 images) and `musinsa_pants_1000/바지` (general pants, 18
+`musinsa_pants_1000/청바지` (jeans, 164 images) and `musinsa_pants_1000/바지` (general pants, 5
 images) — combined then randomly capped to 60. At that ratio the sampled 60-item `pants` catalog
-ends up roughly 90% denim jeans. So `pants` isn't testing "find similar pants" so much as
+ends up 57/60 (95%) denim jeans. So `pants` isn't testing "find similar pants" so much as
 "distinguish this exact jeans wash/fit/length from ~54 other jeans" — a fine-grained
 intra-style discrimination task. A general CLIP-family embedding is good at coarse
 category/style separation (which is why `dress_skirts`/`outer`/`top` all score well) but weak at
@@ -136,6 +136,39 @@ This is a catalog-composition/embedding-capability limitation, not a preprocessi
 scope for ADR-001, but worth flagging for anyone growing the catalog: either source a
 style-balanced pants set (not jeans-dominated), or accept that fine-grained denim ranking needs a
 different embedding model/fine-tuning to work well.
+
+### 5.2 Composition audit: is any other collection skewed like `pants`?
+
+Following the same pattern, every collection's actual sub-style composition was checked (source
+folder sizes and the post-`random.Random(RANDOM_SEED).shuffle()` sampled 60-item catalog),
+by re-running `gather_catalog_paths()` and counting each sampled item's parent folder —
+not simulated, the real function the pilot catalog was built with:
+
+| Collection | Source folders (raw count) | Sampled catalog composition | Dominant share |
+|---|---|---|--:|
+| `pants` | 청바지 jeans (164), 바지 general pants (5) | 57 jeans / 3 general | **95%** |
+| `outer` | 후드티 hoodie (210), 가디건 cardigan (4) | 58 hoodie / 2 cardigan | **97%** |
+| `top` | 반팔 short-sleeve (773), 셔츠 shirt (182), 니트 knit (261), 맨투맨 sweatshirt (249), 긴팔 long-sleeve (254), 나시 sleeveless (57) | 29 반팔 / 9 셔츠 / 9 니트 / 5 맨투맨 / 7 긴팔 / 1 나시 | 48% |
+| `dress_skirts` | 원피스 dress (25), 치마 skirt (14) — pre-filtered to 13 single-product photos | 9 dress / 4 skirt | 69% |
+
+**`outer` is skewed even harder than `pants` (97% vs 95%)** — the source `itda` crawl only ever
+had 4 cardigan photos against 210 hoodies, so the sampled 60-item `outer` catalog has just 2
+cardigans in it. This directly bears on the `outer` caveat in 5's per-category table above: Q006
+is a cardigan query, so under any policy it's searching a catalog where its actual style is
+~3% of the inventory — a likely contributing factor (not the only one, with N=2 outer queries) to
+why category-aware bbox fails to recover for `outer` the way it does for `top`, on top of pure
+query-count noise.
+
+`top` is moderately skewed toward 반팔 (short-sleeve, 48%) but has real representation (5+) in
+every sub-style, which is consistent with `top` being the one collection where category-aware
+bbox actually works as intended. `dress_skirts` is the most balanced of the four (69/31), though
+its absolute size (13 candidates) is the smallest by far.
+
+**Takeaway:** the "pants problem" isn't unique to pants — it's a general consequence of capping
+each collection at a flat 60 items via random sampling across *very* unevenly-sized source
+sub-folders, without stratifying by sub-style. `outer` has the same failure mode, arguably worse.
+Any future catalog rebuild should sample per sub-style (not per collection) to guarantee minimum
+representation, rather than trusting a random shuffle to balance a 210:4 source ratio.
 
 ---
 
