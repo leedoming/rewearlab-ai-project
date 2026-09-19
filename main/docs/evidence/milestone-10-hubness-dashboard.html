@@ -453,6 +453,48 @@ Normalize(...)</pre>
 
   <section>
     <div class="section-head">
+      <p class="eyebrow" style="margin-bottom:2px">Final Decision</p>
+      <h2>N=11, 4개 카테고리 전부 — 처음으로 spec 기준을 통과한 golden set</h2>
+      <p class="section-sub">
+        dress_skirts 데이터가 없다는 게 이 프로젝트 전체의 마지막 구멍이었다. 또 다른 개인 프로젝트에서
+        원피스 25장/치마 14장을 찾았고, 그중 콜라주성 프로모션 배너(파일명에 옷 7개가 한꺼번에 나열된
+        것들)를 detection 개수로 자동 필터링해서 순수 단일 상품 사진 13장을 골라냈다.
+      </p>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat"><span class="n">N=11</span><span class="l">쿼리 (기존 7 + dress_skirts 4)</span></div>
+      <div class="stat"><span class="n">4/4</span><span class="l">카테고리 전부 커버</span></div>
+      <div class="stat" style="border-color:var(--accent); background:var(--accent-soft);"><span class="n" style="color:var(--accent)">PASS</span><span class="l">validate_golden_set() 최초 통과</span></div>
+    </div>
+
+    <div class="panel">
+      <p class="chart-title">최종 E0-E4 (N=11, 4 collection, 결정적 재현)</p>
+      <table>
+        <thead><tr><th>실험</th><th>정책</th><th class="num">NDCG@10</th><th class="num">MRR</th><th class="num">Recall@10</th></tr></thead>
+        <tbody>
+          <tr class="best"><td>E0</td><td>RAW</td><td class="num">0.735</td><td class="num">0.828</td><td class="num">0.883</td></tr>
+          <tr><td>E1</td><td>highest_confidence</td><td class="num">0.608</td><td class="num">0.746</td><td class="num">0.671</td></tr>
+          <tr><td>E2</td><td>largest</td><td class="num">0.598</td><td class="num">0.746</td><td class="num">0.671</td></tr>
+          <tr><td>E3</td><td>category_confidence</td><td class="num">0.659</td><td class="num">0.791</td><td class="num">0.762</td></tr>
+          <tr><td>E4</td><td>category_largest</td><td class="num">0.659</td><td class="num">0.791</td><td class="num">0.762</td></tr>
+        </tbody>
+      </table>
+      <p class="cap" style="margin-top:10px;">RAW가 N=7 때보다 더 큰 격차로 1위 유지 (0.735 vs 0.659).
+        <b>ADR-001: RAW로 최종 결정</b> — 처음으로 "provisional"이 아닌 "Decided".</p>
+    </div>
+
+    <div class="finding">
+      <b>다만 카테고리별로 뜯어보면 얘기가 다르다.</b> <code>top</code>에서는 category-aware bbox가
+      RAW 수준까지 회복(0.799 vs RAW 0.785)하지만, <code>outer</code>에서는 전혀 회복 못 함(0.396,
+      RAW는 0.754). <code>pants</code>는 모든 정책에서 유독 낮음(0.25~0.31) — bbox 문제가 아니라
+      카탈로그 매칭 자체의 문제로 보이며 별도 조사가 필요하다. 숫자를 뭉개서 "RAW가 이겼다"로만
+      끝내지 않고 이 편차를 그대로 기록해뒀다.
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
       <p class="eyebrow" style="margin-bottom:2px">Next</p>
       <h2>그래서 무엇을 고쳐야 하는가</h2>
     </div>
@@ -462,8 +504,9 @@ Normalize(...)</pre>
       <li><div><b>Full mean-centering은 배포 안 함 — golden set 검증에서 NDCG가 떨어졌다.</b>
         Partial centering도 재검증 결과 "공짜 스윗스팟"이 없는 걸로 확인됨 (α가 커질수록 NDCG가
         단조 하락). Hub 억제와 relevance는 진짜 트레이드오프이고, 이건 제품 판단이 필요한 영역이다.</div></li>
-      <li><div><b>ADR-001/002("category-aware bbox가 이긴다")는 재검증 필요 — 버그 수정 후 RAW가 이겼다.</b>
-        N=7이라 이것도 아직 최종 결론은 아니지만, 이전 provisional 방향을 그대로 밀어붙이면 안 된다.</div></li>
+      <li><div><b>ADR-001: RAW로 최종 결정됨.</b> N=11·4개 카테고리·결정적 재현으로 확정 — 더 이상
+        provisional이 아니다. <code>final_config.yaml</code>의 <code>preprocessing</code>도
+        <code>raw</code>로 반영함.</div></li>
       <li><div><b>Hub 억제는 bbox로 해결될 문제가 아니다.</b> 무난한 디자인이 원인이므로, 재순위화(re-ranking)로
         고빈도 피검색 상품에 페널티를 주거나, 텍스트/속성 정보를 결합한 하이브리드 검색을 검토해야 한다.</div></li>
       <li><div><b>"category-aware bbox가 카테고리 오검출을 막는다"는 메커니즘 자체는 여전히 유효하다</b>

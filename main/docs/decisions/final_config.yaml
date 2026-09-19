@@ -4,29 +4,26 @@
 # arbitrarily finalize TODO values before the experiments that justify them
 # have actually been run.
 #
-# Every value below is still TBD. Milestones 4-9 built the full
-# infrastructure to produce every number this file needs (RAW baseline,
-# four bbox selection policies, category filtering, padding ablation,
-# failure taxonomy, sensitivity metrics) -- see docs/evidence/milestone-4.md
-# through milestone-9.md -- but none of it has been run against real data:
-# main/evaluation/dataset/labels.json is still an empty scaffold
-# (`{"queries": {}}`), and torch/chromadb/transformers/open_clip are not
-# installed in this dev environment. Filling in any value here without that
-# evidence would be exactly the fabrication this project's evidence docs
-# have refused to do at every prior milestone. See docs/decisions/ADR-005-
-# final-pipeline.md for the full reasoning and the exact criteria that will
-# decide each value once real ablation results exist.
+# `preprocessing` is decided (ADR-001, docs/evidence/milestone-10-final-decision.md):
+# a real, deterministic, spec-compliant golden set (N=11, all 4 collections,
+# passes evaluation.golden_set.validate_golden_set()) confirms RAW beats
+# every BBox policy tested. Every other value below remains TBD -- E5-E8
+# (category filtering, padding) and Milestone 9's sensitivity sweep were
+# never run against real data, so filling them in now would be exactly the
+# fabrication this project's evidence docs have refused to do at every
+# prior milestone. See docs/decisions/ADR-001 through ADR-005 for the full
+# reasoning behind each value, decided or not.
 
 final_pipeline:
-  preprocessing: TBD  # raw | bbox -- pending E0 vs E1-E4 comparison (ADR-001)
-  bbox_policy: TBD    # highest_confidence | largest | category_confidence | category_largest (ADR-002)
-  padding_ratio: TBD  # 0.0 | 0.1 | 0.2 (ADR-004)
+  preprocessing: raw  # DECIDED -- ADR-001, milestone-10-final-decision.md
+  bbox_policy: TBD     # moot given preprocessing=raw; category_confidence/category_largest would win if BBox were used (ADR-002)
+  padding_ratio: TBD   # moot given preprocessing=raw (ADR-004)
 
   category_filter:
-    policy: TBD        # none | hard | soft (ADR-003)
+    policy: TBD        # none | hard | soft -- E5/E6 never run against real data (ADR-003)
 
   detection:
-    threshold: TBD     # 0.3 | 0.4 | 0.5 (Milestone 9 sensitivity sweep)
+    threshold: TBD     # 0.3 | 0.4 | 0.5 -- Milestone 9 sensitivity sweep never run against real data
 
   retrieval:
-    top_k: TBD         # 5 | 10 | 20 (Milestone 9 sensitivity sweep)
+    top_k: 10          # matches every real experiment run so far (E0-E4); not independently swept

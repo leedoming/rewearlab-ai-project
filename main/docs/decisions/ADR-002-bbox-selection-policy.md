@@ -2,18 +2,19 @@
 
 ## Status
 
-> **⚠️ Superseded by `docs/evidence/milestone-10-transform-bug.md`.** Same root cause as
-> ADR-001: the Pilot Evidence below used embeddings computed with a real preprocessing bug. The
-> corrected re-run still has `category_confidence`/`category_largest` (E3/E4, now identical to
-> each other) beating `highest_confidence`/`largest` (E1/E2) — that part of this ADR's reasoning
-> survives — **but RAW (ADR-001) now beats all four BBox policies**, so the practical
-> recommendation of this ADR only matters if BBox is used at all, which ADR-001 no longer
-> supports. Kept below as the historical record.
+**Decided, but moot: ADR-001 resolves RAW vs. BBox in favor of RAW.** This ADR's own question
+(*which* bbox policy, if BBox is used) is answered — `category_confidence`/`category_largest`
+(E3/E4, tied with each other) beat the category-agnostic policies on the spec-compliant N=11,
+4-collection golden set (`docs/evidence/milestone-10-final-decision.md`), confirming what the
+N=7 pilot (both before and after the transform-bug fix) already showed. But since ADR-001 now
+recommends RAW outright, this ADR's practical relevance is conditional on some future decision
+revisiting RAW vs. BBox — `final_config.yaml`'s `bbox_policy` field stays `TBD` for that reason,
+not for lack of evidence about which policy would win.
 
-**Provisional (partially retracted — see correction above): `category_confidence` (E3).** Based
-on a real but small (N=7 query) pilot — see "Pilot Evidence" below and ADR-001's own Pilot
-Evidence section (same run). Not final: needs confirmation against the full golden set (section
-55) before `docs/decisions/final_config.yaml` is filled in for real.
+One nuance the expanded set surfaced that the N=7 pilot couldn't: **category-aware bbox recovers
+RAW-level NDCG for `top` (0.799 vs RAW's 0.785) but not for `outer` (0.396, same as the
+category-agnostic policies, vs RAW's 0.754)** — based on only 2 `outer` queries, not enough to
+conclude the mechanism fails for that category, but enough to flag rather than paper over.
 
 ## Context
 

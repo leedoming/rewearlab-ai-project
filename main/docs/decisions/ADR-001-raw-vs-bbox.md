@@ -2,16 +2,23 @@
 
 ## Status
 
-> **⚠️ Superseded by `docs/evidence/milestone-10-transform-bug.md`.** The Pilot Evidence below
-> was computed with a real embedding-pipeline bug (`retrieval/models.py` used a random-crop
-> training transform instead of the deterministic validation one). The corrected, deterministic,
-> twice-reproduced re-run **reverses this ADR's provisional call: RAW wins (NDCG@10 0.624 vs.
-> E3/E4's 0.545)**, not category-aware BBox. Kept below as the historical record.
+**Decided: RAW.** Confirmed on a spec-compliant golden set (N=11, all 4 collections, passes
+`evaluation.golden_set.validate_golden_set()`) with a real, deterministic, reproducible pipeline
+— see `docs/evidence/milestone-10-final-decision.md`. `docs/decisions/final_config.yaml`'s
+`preprocessing` field is set to `raw`.
 
-**Provisional (retracted — see correction above): BBox with a category-aware selection policy
-(E3/E4), not RAW.** Based on a real but small (N=7 query) pilot run — see "Pilot Evidence" below.
-Not yet a final decision: this needs confirmation against the full 10-15 query golden set section
-55 asks for before `docs/decisions/final_config.yaml` is filled in for real.
+This decision took two corrections to reach:
+1. The original N=7 pilot (see "Pilot Evidence" below) found category-aware BBox (E3) winning —
+   computed with a real embedding-pipeline bug present (`retrieval/models.py` used a random-crop
+   training transform instead of the deterministic validation one; see
+   `docs/evidence/milestone-10-transform-bug.md`).
+2. The bug-fixed re-run on the same N=7 set reversed that to RAW.
+3. This document's own expansion — a spec-compliant N=11 set across all 4 collections — confirmed
+   RAW by an even wider margin (0.735 vs. 0.659 NDCG@10), not just a bug-fix artifact.
+
+Both the original (buggy) Pilot Evidence and the corrected re-run are kept below/linked as the
+historical record of what was found and when; `milestone-10-final-decision.md` is the current,
+decision-grade evidence.
 
 ## Context
 
@@ -118,10 +125,13 @@ and every relevance judgment made.
 
 ## Future Work
 
-- Grow the golden set to the full 10-15 queries section 55 asks for, covering all four
-  collections (needs real dress_skirts product photos, which this pilot's source data lacked).
-- Get a second rater (ideally a human, not the same AI assistant that ran the pipeline) to
-  relabel at least a sample of the pooled candidates, to check the pilot's own relevance
-  judgments for rater bias before treating this as a final decision.
-- Once both of the above exist, re-run E0-E4 and only then update `docs/decisions/final_config.yaml`'s
-  `preprocessing`/`bbox_policy` fields from `TBD` to a real final value.
+- **Done:** grew the golden set to N=11 across all four collections (dress_skirts sourced from a
+  second personal project — see `milestone-10-final-decision.md`); `final_config.yaml`'s
+  `preprocessing` field is now `raw`, not `TBD`.
+- **Still open:** get a second rater (ideally a human, not the same AI assistant that ran the
+  pipeline) to relabel at least a sample of the pooled candidates, to check for rater bias.
+- **Still open:** the catalog is still capped at 60 items/collection (9 for dress_skirts) — a
+  larger, full-catalog validation would be the gold standard beyond this project's available data.
+- **Still open:** `outer`'s category-aware bbox result didn't recover to RAW level unlike `top`
+  (`milestone-10-final-decision.md` section 4) — worth another look with more than 2 outer
+  queries before concluding anything about that category specifically.
