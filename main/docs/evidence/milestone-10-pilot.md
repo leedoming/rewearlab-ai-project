@@ -4,6 +4,13 @@
 ADR-001/ADR-002, which PR #10 introduced, with real numbers before merge)
 **Repository:** fork `leedoming/rewearlab-ai-project` (upstream: `GeeYun086/rewearlab-ai-project`)
 
+> **⚠️ Correction:** the E0–E4 numbers in this document (section 4 and ADR-001/ADR-002) were
+> computed with a real embedding-pipeline bug present (`retrieval/models.py` fed every image
+> through a random-crop training transform instead of the deterministic validation one). Fixed
+> and re-run in `milestone-10-transform-bug.md`, which **reverses this document's conclusion**
+> (RAW wins the corrected re-run, not `category_confidence`). This document is kept as the
+> historical record of what was found and when; read the correction alongside it.
+
 ---
 
 ## 1. Objective

@@ -2,10 +2,18 @@
 
 ## Status
 
-**Provisional: `category_confidence` (E3).** Based on a real but small (N=7 query) pilot —
-see "Pilot Evidence" below and ADR-001's own Pilot Evidence section (same run). Not final: needs
-confirmation against the full golden set (section 55) before `docs/decisions/final_config.yaml`
-is filled in for real.
+> **⚠️ Superseded by `docs/evidence/milestone-10-transform-bug.md`.** Same root cause as
+> ADR-001: the Pilot Evidence below used embeddings computed with a real preprocessing bug. The
+> corrected re-run still has `category_confidence`/`category_largest` (E3/E4, now identical to
+> each other) beating `highest_confidence`/`largest` (E1/E2) — that part of this ADR's reasoning
+> survives — **but RAW (ADR-001) now beats all four BBox policies**, so the practical
+> recommendation of this ADR only matters if BBox is used at all, which ADR-001 no longer
+> supports. Kept below as the historical record.
+
+**Provisional (partially retracted — see correction above): `category_confidence` (E3).** Based
+on a real but small (N=7 query) pilot — see "Pilot Evidence" below and ADR-001's own Pilot
+Evidence section (same run). Not final: needs confirmation against the full golden set (section
+55) before `docs/decisions/final_config.yaml` is filled in for real.
 
 ## Context
 

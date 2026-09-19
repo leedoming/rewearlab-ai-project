@@ -6,6 +6,15 @@
 **Portfolio dashboard:** https://claude.ai/artifact/Jkp74Hc888kSmN3Pv4AeW8 (private; see the user's
 own presentation of this link for sharing)
 
+> **⚠️ Correction:** the exact Gini/NDCG numbers in this document (sections 3.1 and 3.4) were
+> computed with a real embedding-pipeline bug present, found and fixed in
+> `milestone-10-transform-bug.md`. **This document's core finding (hubs are generic/plain-design
+> garments, not messy thumbnails; BBox cropping doesn't meaningfully reduce hub concentration) is
+> robust to the fix and still holds** — the corrected Gini values are nearly identical to the
+> ones below. **What does NOT survive the fix: the "α≈0.4–0.5 partial-centering sweet spot"
+> recommendation in section 3.4/4 was an artifact of the bug's non-determinism** — see the
+> correction document for the real (monotonic, no-free-lunch) trade-off curve.
+
 ---
 
 ## 1. Objective

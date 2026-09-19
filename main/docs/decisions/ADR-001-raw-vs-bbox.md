@@ -2,10 +2,16 @@
 
 ## Status
 
-**Provisional: BBox with a category-aware selection policy (E3/E4), not RAW.** Based on a
-real but small (N=7 query) pilot run — see "Pilot Evidence" below. Not yet a final decision:
-this needs confirmation against the full 10-15 query golden set section 55 asks for before
-`docs/decisions/final_config.yaml` is filled in for real.
+> **⚠️ Superseded by `docs/evidence/milestone-10-transform-bug.md`.** The Pilot Evidence below
+> was computed with a real embedding-pipeline bug (`retrieval/models.py` used a random-crop
+> training transform instead of the deterministic validation one). The corrected, deterministic,
+> twice-reproduced re-run **reverses this ADR's provisional call: RAW wins (NDCG@10 0.624 vs.
+> E3/E4's 0.545)**, not category-aware BBox. Kept below as the historical record.
+
+**Provisional (retracted — see correction above): BBox with a category-aware selection policy
+(E3/E4), not RAW.** Based on a real but small (N=7 query) pilot run — see "Pilot Evidence" below.
+Not yet a final decision: this needs confirmation against the full 10-15 query golden set section
+55 asks for before `docs/decisions/final_config.yaml` is filled in for real.
 
 ## Context
 
