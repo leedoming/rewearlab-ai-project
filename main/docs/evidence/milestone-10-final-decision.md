@@ -101,10 +101,41 @@ Two things worth flagging honestly, not smoothing over:
   category-aware selection doesn't help `outer` the way it helps `top` — not resolved here,
   flagged as-is rather than papered over.
 - **`pants` scores low across every experiment (0.254–0.307), including RAW.** This is not a
-  bbox/preprocessing story at all — it's consistent across every policy, suggesting the pants
-  catalog/query match quality itself is weak (e.g. Q001's dark wash straight jeans genuinely may
-  not have a close match in a 60-item random catalog sample). Out of scope for this ADR, noted for
-  future investigation.
+  bbox/preprocessing story at all — it's consistent across every policy. Investigated below.
+
+### 5.1 Follow-up: why is `pants` low under every policy?
+
+Not a labeling artifact and not a bbox/policy story — a real embedding-ranking weakness, found by
+re-running Q001/Q002 with `top_k=60` (the full `pants` collection) instead of the usual `top_k=10`,
+so the actual rank of every labeled product could be inspected, not just whether it made the
+saved top-10:
+
+| Query | Product | Relevance | Rank (of 60) |
+|---|---|--:|--:|
+| Q001 | pants-0012 | **2** | 25 |
+| Q001 | pants-0011 | **2** | 47 |
+| Q001 | pants-0007 | **2** | 34 |
+| Q001 | pants-0006 | 1 | 2 |
+| Q002 | pants-0022 | **2** | 43 |
+| Q002 | pants-0031 | 0 | 1 |
+| Q002 | pants-0001 | 0 | 3 |
+
+Every relevance=2 (near-duplicate) item is buried past rank 25, while relevance=0/1 items occupy
+the top ranks. This lines up with a real, structural cause in the catalog itself:
+`FOLDER_TO_COLLECTION` maps *two* source folders to the single `pants` collection —
+`musinsa_pants_1000/청바지` (jeans, 164 images) and `musinsa_pants_1000/바지` (general pants, 18
+images) — combined then randomly capped to 60. At that ratio the sampled 60-item `pants` catalog
+ends up roughly 90% denim jeans. So `pants` isn't testing "find similar pants" so much as
+"distinguish this exact jeans wash/fit/length from ~54 other jeans" — a fine-grained
+intra-style discrimination task. A general CLIP-family embedding is good at coarse
+category/style separation (which is why `dress_skirts`/`outer`/`top` all score well) but weak at
+this kind of fine-grained denim discrimination, and that weakness shows up identically under
+every bbox policy because none of them touch the embedding model itself.
+
+This is a catalog-composition/embedding-capability limitation, not a preprocessing bug — out of
+scope for ADR-001, but worth flagging for anyone growing the catalog: either source a
+style-balanced pants set (not jeans-dominated), or accept that fine-grained denim ranking needs a
+different embedding model/fine-tuning to work well.
 
 ---
 
